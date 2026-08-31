@@ -31,8 +31,9 @@ BRIDGE_TOPICS = [
     "/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
     "/depth_camera@sensor_msgs/msg/Image[gz.msgs.Image",
     "/depth_camera/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked",
-    # 시뮬 odom (stage2 MPC 속도 추정 + 관제 시각화용 — 실기에서는 상태추정기로 대체)
-    "/world/plant/dynamic_pose/info@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
+    # 시뮬 odom (stage2 MPC 상태 + 관제 시각화용 — 실기에서는 상태추정기로 대체)
+    # 주의: Pose_V→TFMessage 브리지는 엔티티 이름을 잃으므로 OdometryPublisher 사용
+    "/model/go2/odometry@nav_msgs/msg/Odometry[gz.msgs.Odometry",
 ]
 
 

@@ -99,7 +99,10 @@ class GaitController(Node):
         self.swing_frozen = {leg: None for leg in LEGS}  # 동결 시점의 sx
         self.create_subscription(JointState, "/joint_states", self._on_joints, 10)
 
-        # stage2 LIP-MPC: CoP 오프셋을 발 목표에 가산 (mpc_node 미실행 시 0)
+        # stage2 LIP-MPC: CoP 오프셋을 발 목표에 가산 (mpc_node 미실행 시 0).
+        # 기본 비활성 — A/B 검증 결과 위치제어 지지에서는 LIP 모델 불일치로
+        # 자기 가진 전도를 유발 (stage2_simple_mpc_py/TUNING.md 근거)
+        self.declare_parameter("mpc_enable", False)
         self.cop = [0.0, 0.0]
         self.cop_stamp = 0.0
         self.create_subscription(Vector3, "/mpc/cop_offset", self._on_cop, 10)
@@ -252,12 +255,12 @@ class GaitController(Node):
         kp = self.get_parameter("posture_gain").value
         dz = kp * (hy * self.roll - hx * self.pitch)
         z += max(-0.04, min(0.04, dz))
-        # stage2 MPC CoP 오프셋: 지지다각형을 CoM 대비 이동시켜 예측적 균형 회복
-        # (0.5초 이상 미수신이면 무시 — MPC 노드 없이도 stage1 단독 동작)
-        now = self.get_clock().now().nanoseconds * 1e-9
-        if now - self.cop_stamp < 0.5:
-            x += self.cop[0]
-            y += self.cop[1]
+        # stage2 MPC CoP 오프셋 (mpc_enable 시에만; 0.5초 스테일 가드)
+        if self.get_parameter("mpc_enable").value:
+            now = self.get_clock().now().nanoseconds * 1e-9
+            if now - self.cop_stamp < 0.5:
+                x += self.cop[0]
+                y += self.cop[1]
         return x, SIDE[leg] * L_HIP + y, z
 
     def _step(self):
@@ -289,19 +292,15 @@ class GaitController(Node):
             self.phase = 0.0
             self.target_yaw = None
 
-        # 기립 정지 중에도 MPC CoP 오프셋을 반영해 외란에 예측적으로 대응
-        now = self.get_clock().now().nanoseconds * 1e-9
-        cop_fresh = now - self.cop_stamp < 0.5
-
         angles = []
         for leg in LEGS:
             if self.active:
                 x, y, z = self._foot_target(leg, gait, self.phase)
                 q = leg_ik(x, y, z, SIDE[leg])
-            elif cop_fresh and (abs(self.cop[0]) + abs(self.cop[1])) > 0.003:
-                q = leg_ik(self.cop[0], SIDE[leg] * L_HIP + self.cop[1],
-                           -self.body_h, SIDE[leg])
             else:
+                # 기립 중에는 MPC 미적용: 발이 강성 고정된 정지 상태에서는
+                # LIP(CoP→기울기 가속) 모델이 성립하지 않아 자기 가진으로
+                # 오히려 전도됨 (A/B 재검증으로 확인) — TUNING.md 참조
                 q = STAND
             angles.extend(q)
 

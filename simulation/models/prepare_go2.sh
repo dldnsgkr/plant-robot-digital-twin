@@ -95,6 +95,11 @@ ros2_control = '''
     <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>/ws/src/plant_dt/module1_locomotion/config/go2_controllers.yaml</parameters>
     </plugin>
+    <!-- 시뮬 odometry (MPC 상태추정·관제용, gz 토픽 /model/go2/odometry) -->
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <dimensions>3</dimensions>
+    </plugin>
   </gazebo>
 '''
 
