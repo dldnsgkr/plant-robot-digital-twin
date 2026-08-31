@@ -8,8 +8,13 @@ m = re.search(r'name: .go2.\s*.*?position \{(.*?)\}\s*orientation \{(.*?)\}', t,
 if not m:
     print("no pose")
     sys.exit(1)
+import math
+
 pos = dict(re.findall(r'(\w): ([-\d.e]+)', m.group(1)))
 ori = dict(re.findall(r'(\w): ([-\d.e]+)', m.group(2)))
-print("x=%.2f y=%.2f z=%.2f qx=%.2f qy=%.2f" % (
+qx, qy = float(ori.get('x', 0)), float(ori.get('y', 0))
+qz, qw = float(ori.get('z', 0)), float(ori.get('w', 1))
+yaw = math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+print("x=%.2f y=%.2f z=%.2f qx=%.2f qy=%.2f yaw=%.2f" % (
     float(pos.get('x', 0)), float(pos.get('y', 0)), float(pos.get('z', 0)),
-    float(ori.get('x', 0)), float(ori.get('y', 0))))
+    qx, qy, yaw))
