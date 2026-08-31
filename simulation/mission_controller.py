@@ -124,9 +124,23 @@ class Mission(Node):
 
         if self.state == "GOTO_GAUGE":
             if self._drive_to(GAUGE_VP):
-                self._event("게이지 관측점 도착 — 판독 시작")
+                self._event("게이지 관측점 도착 — 게이지 방향 정렬")
+                self.state, self.t_state = "ALIGN", 0.0
+
+        elif self.state == "ALIGN":
+            # 게이지(38, 1.575)를 바라보도록 제자리 회전
+            target = math.atan2(1.575 - self.pose[1], 38.0 - self.pose[0])
+            err = math.atan2(math.sin(target - self.pose[2]),
+                             math.cos(target - self.pose[2]))
+            if abs(err) < 0.12 or self.t_state > 20.0:
+                self.pub_cmd.publish(Twist())
+                self._event("정렬 완료 — 판독 시작")
                 self.gauge_readings = []
                 self.state, self.t_state = "INSPECT", 0.0
+            else:
+                cmd = Twist()
+                cmd.angular.z = max(-0.35, min(0.35, 1.0 * err))
+                self.pub_cmd.publish(cmd)
 
         elif self.state == "INSPECT":
             if self.t_state > 12.0:
