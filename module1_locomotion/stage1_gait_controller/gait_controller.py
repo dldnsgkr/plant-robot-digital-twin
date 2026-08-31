@@ -20,7 +20,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Bool, Float64MultiArray
 
 # ---- Go2 기구 파라미터 (urdf 실측) ----
 L_HIP = 0.0955     # 힙 롤축 → 다리 평면 y 오프셋
@@ -71,11 +71,13 @@ class GaitController(Node):
 
         self.cmd = Twist()
         self.phase = 0.0
-        self.active = False  # cmd_vel이 0이면 기립 유지
+        self.active = False   # cmd_vel이 0이면 기립 유지
+        self.enabled = True   # fall_recovery가 복구 중이면 false
 
         self.pub = self.create_publisher(
             Float64MultiArray, "/joint_group_position_controller/commands", 10)
         self.create_subscription(Twist, "/cmd_vel", self._on_cmd, 10)
+        self.create_subscription(Bool, "/gait_enable", self._on_enable, 10)
 
         rate = self.get_parameter("rate_hz").value
         self.dt = 1.0 / rate
@@ -85,6 +87,12 @@ class GaitController(Node):
 
     def _on_cmd(self, msg):
         self.cmd = msg
+
+    def _on_enable(self, msg):
+        self.enabled = msg.data
+        if not msg.data:
+            self.active = False
+            self.phase = 0.0
 
     def _foot_target(self, leg, gait, phase):
         """다리별 위상 → 힙 기준 발 목표 좌표."""
@@ -116,6 +124,8 @@ class GaitController(Node):
         return x, SIDE[leg] * L_HIP + y, z
 
     def _step(self):
+        if not self.enabled:   # 복구 중에는 fall_recovery가 관절을 점유
+            return
         gait = GAITS[self.get_parameter("gait").value]
         moving = (abs(self.cmd.linear.x) + abs(self.cmd.linear.y)
                   + abs(self.cmd.angular.z)) > 1e-3
