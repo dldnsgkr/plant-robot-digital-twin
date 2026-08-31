@@ -1,0 +1,27 @@
+# Go2 ros2_control 컨트롤러 구성 (gz_ros2_control 플러그인이 로드)
+controller_manager:
+  ros__parameters:
+    update_rate: 200  # Hz — 보행 궤적 추종에 필요한 제어 주기
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    joint_group_position_controller:
+      type: position_controllers/JointGroupPositionController
+
+joint_group_position_controller:
+  ros__parameters:
+    # 게이트 생성기가 이 순서로 12관절 목표각을 발행한다
+    joints:
+      - FL_hip_joint
+      - FL_thigh_joint
+      - FL_calf_joint
+      - FR_hip_joint
+      - FR_thigh_joint
+      - FR_calf_joint
+      - RL_hip_joint
+      - RL_thigh_joint
+      - RL_calf_joint
+      - RR_hip_joint
+      - RR_thigh_joint
+      - RR_calf_joint

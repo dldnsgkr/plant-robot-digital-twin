@@ -35,7 +35,11 @@ BRIDGE_TOPICS = [
 
 
 def generate_launch_description():
-    env = {"GZ_SIM_RESOURCE_PATH": os.path.join(PKG_ROOT, "models")}
+    env = {
+        "GZ_SIM_RESOURCE_PATH": os.path.join(PKG_ROOT, "models"),
+        # gz_ros2_control 플러그인(libgz_ros2_control-system.so) 탐색 경로
+        "GZ_SIM_SYSTEM_PLUGIN_PATH": "/opt/ros/jazzy/lib",
+    }
 
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="false"),
@@ -66,8 +70,34 @@ def generate_launch_description():
                         "-file", ROBOT_URDF,
                         "-name", "go2",
                         "-x", SPAWN["x"], "-y", SPAWN["y"], "-z", SPAWN["z"],
+                        "-Y", "3.14159",  # 공장 방향(-x)을 바라보고 시작
                     ],
                     additional_env=env,
+                    output="screen",
+                ),
+            ],
+        ),
+
+        # 로봇 TF 발행 (/joint_states → TF 트리)
+        Node(
+            package="robot_state_publisher",
+            executable="robot_state_publisher",
+            parameters=[{
+                "robot_description": open(ROBOT_URDF).read(),
+                "use_sim_time": True,
+            }],
+            output="screen",
+        ),
+
+        # 컨트롤러 기동 (로봇 스폰 → gz_ros2_control 로드 후)
+        TimerAction(
+            period=10.0,
+            actions=[
+                Node(
+                    package="controller_manager",
+                    executable="spawner",
+                    arguments=["joint_state_broadcaster",
+                               "joint_group_position_controller"],
                     output="screen",
                 ),
             ],

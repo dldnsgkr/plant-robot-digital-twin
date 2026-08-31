@@ -2,6 +2,7 @@
 # go2_description 원본 URDF → Gazebo Harmonic 스폰용 go2_sim.urdf 생성
 # 1) package:// URI를 model:// 로 변환 (GZ_SIM_RESOURCE_PATH 로 해석)
 # 2) 시뮬레이션 센서 부착: LiDAR, RGB 카메라, Depth 카메라, IMU
+# 3) ros2_control(12관절 position 인터페이스) + gz_ros2_control 플러그인 주입
 set -e
 cd "$(dirname "$0")"
 
@@ -72,11 +73,36 @@ sensors = '''
   </gazebo>
 '''
 
+# 12관절 ros2_control 정의 — 초기값은 기립 자세 (hip 0, thigh 0.8, calf -1.6)
+STAND = {'hip': 0.0, 'thigh': 0.8, 'calf': -1.6}
+joints = []
+for leg in ('FL', 'FR', 'RL', 'RR'):
+    for part in ('hip', 'thigh', 'calf'):
+        joints.append(f'''    <joint name="{leg}_{part}_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">{STAND[part]}</param></state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>''')
+
+ros2_control = '''
+  <!-- ===== ros2_control (Phase 2에서 주입) ===== -->
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware><plugin>gz_ros2_control/GazeboSimSystem</plugin></hardware>
+''' + '\\n'.join(joints) + '''
+  </ros2_control>
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>/ws/src/plant_dt/module1_locomotion/config/go2_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+'''
+
 path = sys.argv[1]
 text = open(path).read()
 assert '</robot>' in text
-open(path, 'w').write(text.replace('</robot>', sensors + '</robot>'))
-print(f'{path}: 센서 삽입 완료')
+open(path, 'w').write(text.replace('</robot>', sensors + ros2_control + '</robot>'))
+print(f'{path}: 센서 + ros2_control 삽입 완료')
 EOF
 
 echo "생성 완료: $OUT"
