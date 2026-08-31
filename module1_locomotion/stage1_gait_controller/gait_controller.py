@@ -19,7 +19,7 @@ import math
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import Imu, JointState
 from std_msgs.msg import Bool, Float32MultiArray, Float64MultiArray
 
@@ -99,6 +99,11 @@ class GaitController(Node):
         self.swing_frozen = {leg: None for leg in LEGS}  # 동결 시점의 sx
         self.create_subscription(JointState, "/joint_states", self._on_joints, 10)
 
+        # stage2 LIP-MPC: CoP 오프셋을 발 목표에 가산 (mpc_node 미실행 시 0)
+        self.cop = [0.0, 0.0]
+        self.cop_stamp = 0.0
+        self.create_subscription(Vector3, "/mpc/cop_offset", self._on_cop, 10)
+
         # IMU 피드백: 요 유지(횡 드리프트 방지) + 롤/피치 자세 안정화
         self.declare_parameter("yaw_hold", True)
         self.declare_parameter("posture_gain", 0.5)
@@ -123,6 +128,10 @@ class GaitController(Node):
 
     def _on_cmd(self, msg):
         self.cmd = msg
+
+    def _on_cop(self, msg):
+        self.cop = [msg.x, msg.y]
+        self.cop_stamp = self.get_clock().now().nanoseconds * 1e-9
 
     def _on_joints(self, msg):
         for i, name in enumerate(msg.name):
@@ -243,6 +252,12 @@ class GaitController(Node):
         kp = self.get_parameter("posture_gain").value
         dz = kp * (hy * self.roll - hx * self.pitch)
         z += max(-0.04, min(0.04, dz))
+        # stage2 MPC CoP 오프셋: 지지다각형을 CoM 대비 이동시켜 예측적 균형 회복
+        # (0.5초 이상 미수신이면 무시 — MPC 노드 없이도 stage1 단독 동작)
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if now - self.cop_stamp < 0.5:
+            x += self.cop[0]
+            y += self.cop[1]
         return x, SIDE[leg] * L_HIP + y, z
 
     def _step(self):
@@ -274,11 +289,18 @@ class GaitController(Node):
             self.phase = 0.0
             self.target_yaw = None
 
+        # 기립 정지 중에도 MPC CoP 오프셋을 반영해 외란에 예측적으로 대응
+        now = self.get_clock().now().nanoseconds * 1e-9
+        cop_fresh = now - self.cop_stamp < 0.5
+
         angles = []
         for leg in LEGS:
             if self.active:
                 x, y, z = self._foot_target(leg, gait, self.phase)
                 q = leg_ik(x, y, z, SIDE[leg])
+            elif cop_fresh and (abs(self.cop[0]) + abs(self.cop[1])) > 0.003:
+                q = leg_ik(self.cop[0], SIDE[leg] * L_HIP + self.cop[1],
+                           -self.body_h, SIDE[leg])
             else:
                 q = STAND
             angles.extend(q)
