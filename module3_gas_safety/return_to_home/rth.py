@@ -140,9 +140,12 @@ class Rth(Node):
 
         now = self.get_clock().now().nanoseconds * 1e-9
         # 통신 음영 (복도 깊숙) 진입 감지 — 구역 밖에 있다가 '진입'한 경우만
-        # (배치 직후 구역 안에서 시작하는 경우의 오발동 방지)
+        # (배치 직후 구역 안 시작·오도메트리 초기 과도값의 오발동 방지: 기동
+        # 후 15초는 무장하지 않음)
+        if not hasattr(self, "_t0"):
+            self._t0 = now
         in_shadow = self.pose is not None and self.pose[0] > 48.0
-        if not in_shadow and self.pose is not None:
+        if not in_shadow and self.pose is not None and now - self._t0 > 15.0:
             self.shadow_armed = True
         if in_shadow and getattr(self, "shadow_armed", False):
             if self.shadow_since is None:

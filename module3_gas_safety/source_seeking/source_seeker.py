@@ -28,7 +28,7 @@ from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Bool, Float32
 
-FOUND_PPM = 40.0
+FOUND_PPM = 50.0
 SURGE_PPM = 12.0      # 이 이상이면 플룸 내부로 보고 풍상 직진
 GRAD_MIN = 0.6        # 이보다 약한 구배는 난류 노이즈로 간주 (ppm/m)
 V_WALK = 0.22
@@ -65,15 +65,15 @@ class SourceSeeker(Node):
         self.create_subscription(Bool, "/rth_active", self._on_rth, 1)
         self.create_subscription(Vector3, "/gas/wind", self._on_wind, 1)
         self.create_subscription(Bool, "/gas/alarm", self._on_alarm, 1)
+        self.create_timer(0.1, self._step)
+        self._dbg = ("-", 0.0)
+        self.create_timer(2.0, self._debug)
+        self.get_logger().info("source_seeker 시작")
 
     def _on_alarm(self, msg):
         if msg.data and not self.alarmed:
             self.alarmed = True
             self.get_logger().info("가스 알람 수신 — 누출원 탐색 시작")
-        self.create_timer(0.1, self._step)
-        self._dbg = ("-", 0.0)
-        self.create_timer(2.0, self._debug)
-        self.get_logger().info("source_seeker 시작")
 
     def _debug(self):
         if self.pose:
