@@ -252,14 +252,29 @@
     <!-- ============ 아날로그 게이지 패널 (Module 2 판독 대상, 복도 벽면) ============ -->
     <model name="gauge_panel">
       <static>true</static>
-      <pose>38 1.62 1.2 0 0 0</pose>
+      <pose>38 1.62 0.6 0 0 0</pose>
       <link name="link">
         <collision name="c"><geometry><box><size>0.5 0.06 0.5</size></box></geometry></collision>
         <visual name="panel_v"><geometry><box><size>0.5 0.06 0.5</size></box></geometry>
           <material><ambient>0.9 0.9 0.88 1</ambient><diffuse>0.9 0.9 0.88 1</diffuse></material></visual>
-        <!-- 게이지 원판 (Phase 3에서 눈금/바늘 텍스처로 교체) -->
-        <visual name="dial_v"><pose>0 -0.035 0 1.5708 0 0</pose><geometry><cylinder><radius>0.18</radius><length>0.01</length></cylinder></geometry>
-          <material><ambient>0.95 0.95 0.95 1</ambient><diffuse>0.95 0.95 0.95 1</diffuse></material></visual>
+        <!-- 눈금판: 0~10 bar, 270° 스윕 (텍스처는 models/gauge/make_dial.py 생성) -->
+        <visual name="dial_v"><pose>0 -0.034 0 0 0 0</pose>
+          <geometry><box><size>0.36 0.005 0.36</size></box></geometry>
+          <material>
+            <diffuse>1 1 1 1</diffuse>
+            <pbr><metal><albedo_map>model://gauge/dial.png</albedo_map></metal></pbr>
+          </material></visual>
+      </link>
+    </model>
+
+    <!-- 게이지 바늘: plant_process 노드가 압력값에 따라 pose(y축 회전)를 갱신 -->
+    <model name="gauge_needle">
+      <static>true</static>
+      <pose>38 1.575 0.6 0 0 0</pose>
+      <link name="link">
+        <visual name="v"><pose>0.055 0 0 0 0 0</pose>
+          <geometry><box><size>0.13 0.004 0.014</size></box></geometry>
+          <material><ambient>0.8 0.05 0.05 1</ambient><diffuse>0.8 0.05 0.05 1</diffuse></material></visual>
       </link>
     </model>
 
