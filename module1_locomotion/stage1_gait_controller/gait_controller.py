@@ -20,6 +20,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, Vector3
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu, JointState
 from std_msgs.msg import Bool, Float32MultiArray, Float64MultiArray
 
@@ -107,6 +108,13 @@ class GaitController(Node):
         self.cop_stamp = 0.0
         self.create_subscription(Vector3, "/mpc/cop_offset", self._on_cop, 10)
 
+        # 속도 폐루프: 오도메트리 몸속도 대비 지령 오차를 PI 보정
+        self.v_meas = [0.0, 0.0]
+        self.v_corr = [0.0, 0.0]
+        self.v_int = [0.0, 0.0]
+        self.create_subscription(Odometry, "/model/go2/odometry",
+                                 self._on_odom_gait, 10)
+
         # IMU 피드백: 요 유지(횡 드리프트 방지) + 롤/피치 자세 안정화
         self.declare_parameter("yaw_hold", True)
         self.declare_parameter("posture_gain", 0.5)
@@ -135,6 +143,11 @@ class GaitController(Node):
     def _on_cop(self, msg):
         self.cop = [msg.x, msg.y]
         self.cop_stamp = self.get_clock().now().nanoseconds * 1e-9
+
+    def _on_odom_gait(self, msg):
+        a = 0.3
+        self.v_meas[0] += a * (msg.twist.twist.linear.x - self.v_meas[0])
+        self.v_meas[1] += a * (msg.twist.twist.linear.y - self.v_meas[1])
 
     def _on_joints(self, msg):
         for i, name in enumerate(msg.name):
@@ -203,6 +216,10 @@ class GaitController(Node):
         vx = self.cmd.linear.x
         vy = self.cmd.linear.y
         wz = self.cmd.angular.z
+        # 속도 폐루프 보정: 이 게이트는 방향·상황에 따라 기생 병진 결합이
+        # 커서(측방→후진 등, 실측) 오도메트리 몸속도로 지령 오차를 PI 보정한다
+        vx += self.v_corr[0]
+        vy += self.v_corr[1]
         # 요 유지: 회전 명령이 없을 때 초기 방위를 PD제어로 유지 (횡 드리프트 방지).
         # 단, 리프트 보행 중에는 회전 스윕이 지면을 긁어 오히려 요를 흩뜨리므로 중단.
         if (abs(wz) < 1e-3 and self.target_yaw is not None
@@ -210,8 +227,9 @@ class GaitController(Node):
                 and self.get_parameter("yaw_hold").value):
             err = math.atan2(math.sin(self.target_yaw - self.yaw),
                              math.cos(self.target_yaw - self.yaw))
-            # PD 제어: 자이로 감쇠 없이는 지연 때문에 요 진동이 발산한다
-            wz = max(-0.25, min(0.25, 0.7 * err - 0.25 * self.gyro_z))
+            # PD 제어: 자이로 감쇠 없이는 지연 때문에 요 진동이 발산한다.
+            # (wz의 기생 후진 결합은 속도 PI 폐루프가 상쇄 — 권한 상향 가능)
+            wz = max(-0.4, min(0.4, 1.2 * err - 0.3 * self.gyro_z))
             self.wz_corr = wz
         # 회전 성분: 힙 위치에 따른 접선 속도 기여
         hx = HIP_X if leg[0] == "F" else -HIP_X
@@ -282,15 +300,26 @@ class GaitController(Node):
                   + abs(self.cmd.angular.z)) > 1e-3
 
         if moving:
-            if not self.active:
-                self.target_yaw = self.yaw  # 보행 시작 방위를 유지 목표로
+            if not self.active or abs(self.cmd.angular.z) > 1e-3:
+                # 보행 시작 시, 그리고 회전 명령 중에는 목표 방위를 현재로 갱신
+                # (회전이 끝난 뒤 마지막 방위를 유지)
+                self.target_yaw = self.yaw
             self.active = True
             self.phase = (self.phase + self.dt / gait["period"]) % 1.0
+            # 속도 폐루프 PI (권한 ±0.15 m/s — 기생 결합 상쇄 수준으로 제한)
+            for i, cmd_v in enumerate((self.cmd.linear.x, self.cmd.linear.y)):
+                err = cmd_v - self.v_meas[i]
+                self.v_int[i] = max(-0.15, min(0.15,
+                                    self.v_int[i] + 0.25 * err * self.dt))
+                self.v_corr[i] = max(-0.15, min(0.15,
+                                     0.25 * err + self.v_int[i]))
         elif self.active:
             # 정지 명령: 위상을 0으로 되돌리고 기립 자세로 복귀
             self.active = False
             self.phase = 0.0
             self.target_yaw = None
+            self.v_int = [0.0, 0.0]
+            self.v_corr = [0.0, 0.0]
 
         angles = []
         for leg in LEGS:

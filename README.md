@@ -74,5 +74,5 @@ docs/                 # 계획서·요구사항·보고서
 | Module 1 MPC stage2 (LIP-MPC) | 완료 | launch 후 `python3 module1_locomotion/stage2_simple_mpc_py/mpc_node.py` — 게이트와 병행 실행, 튜닝 기록은 stage2_simple_mpc_py/TUNING.md |
 | Module 1 MPC stage3 (C++ Convex) | 예정 | - |
 | Module 2 Inspection AI | 완료 | launch 후 gauge_reader/plant_process/image_degrader, thermal_camera_sim/thermal_fusion 실행. 정확도: `eval_accuracy.py`, 순찰 경로: `patrol_planner.py` |
-| Module 3 Gas/Safety | 예정 | - |
+| Module 3 Gas/Safety | 알고리즘 완성 (상태: module3_gas_safety/STATUS.md) | launch 후 gas_field/source_seeker/rth 실행 |
 | 통합 시나리오 | 예정 | - |
