@@ -1,0 +1,22 @@
+# 자동 생성: patrol_planner.py — Nav2 waypoint follower 입력
+waypoints:
+  - name: gas_tank
+    x: -6.80
+    y: 6.00
+    yaw: 3.142
+  - name: machine_pipe_joint
+    x: -5.50
+    y: -5.40
+    yaw: 3.142
+  - name: machine_motor
+    x: -5.50
+    y: -6.00
+    yaw: 3.142
+  - name: gauge_panel
+    x: 38.00
+    y: 0.22
+    yaw: 1.571
+  - name: charging_station
+    x: 11.00
+    y: 7.50
+    yaw: 0.0

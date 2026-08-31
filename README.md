@@ -73,6 +73,6 @@ docs/                 # 계획서·요구사항·보고서
 | Module 1 Locomotion (stage1) | 완료 | 컨테이너에서 launch 후 `python3 module1_locomotion/stage1_gait_controller/gait_controller.py`, `.../terrain_mapping/elevation_map.py`, `.../fall_recovery/fall_recovery.py` 실행, `/cmd_vel`로 조종 |
 | Module 1 MPC stage2 (LIP-MPC) | 완료 | launch 후 `python3 module1_locomotion/stage2_simple_mpc_py/mpc_node.py` — 게이트와 병행 실행, 튜닝 기록은 stage2_simple_mpc_py/TUNING.md |
 | Module 1 MPC stage3 (C++ Convex) | 예정 | - |
-| Module 2 Inspection AI | 예정 | - |
+| Module 2 Inspection AI | 완료 | launch 후 gauge_reader/plant_process/image_degrader, thermal_camera_sim/thermal_fusion 실행. 정확도: `eval_accuracy.py`, 순찰 경로: `patrol_planner.py` |
 | Module 3 Gas/Safety | 예정 | - |
 | 통합 시나리오 | 예정 | - |
