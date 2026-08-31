@@ -1,0 +1,47 @@
+# 사용법 (docker/ 디렉토리에서):
+#   docker compose build          # 최초 1회 (10~20분)
+#   docker compose up -d          # sim + novnc 기동
+#   docker compose exec sim bash  # 개발 셸 진입
+#   docker compose down           # 종료
+#
+# 확인 창구:
+#   - Foxglove Studio (Mac 네이티브 앱) → ws://localhost:8765 접속
+#   - Gazebo GUI가 필요할 때 → 브라우저 http://localhost:8080/vnc.html
+services:
+  sim:
+    build: .
+    image: plant-dt:humble
+    container_name: plant-dt-sim
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=novnc:0.0            # GUI 앱은 novnc 컨테이너의 X 서버로 출력
+      - LIBGL_ALWAYS_SOFTWARE=1      # GPU 없는 컨테이너용 소프트웨어 렌더링
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - ..:/ws/src/plant_dt          # 리포지토리 전체를 워크스페이스 소스로 마운트
+    ports:
+      - "8765:8765"                  # foxglove_bridge WebSocket
+      - "9090:9090"                  # rosbridge (Phase 5 대시보드용)
+    networks:
+      - x11
+    command: bash
+
+  # 브라우저 기반 X 서버 (Gazebo GUI 확인용, 평소엔 headless + Foxglove 권장)
+  # amd64 이미지라 Apple Silicon에서는 에뮬레이션으로 돌아감 — GUI가 느리면
+  # gzserver(headless)만 쓰고 Foxglove로 확인할 것
+  novnc:
+    image: theasp/novnc:latest
+    platform: linux/amd64
+    container_name: plant-dt-novnc
+    environment:
+      - DISPLAY_WIDTH=1600
+      - DISPLAY_HEIGHT=900
+      - RUN_XTERM=no
+    ports:
+      - "8080:8080"
+    networks:
+      - x11
+
+networks:
+  x11:

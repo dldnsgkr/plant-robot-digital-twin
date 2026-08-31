@@ -1,0 +1,12 @@
+# ROS2 / colcon
+build/
+install/
+log/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# 대용량 에셋 원본 (다운로드로 재획득)
+simulation/assets/*.zip
