@@ -10,7 +10,7 @@
 services:
   sim:
     build: .
-    image: plant-dt:humble
+    image: plant-dt:jazzy
     container_name: plant-dt-sim
     stdin_open: true
     tty: true

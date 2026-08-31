@@ -74,14 +74,20 @@ Virtual Plant → Robot Twin → Simulation Sensor Data → Inspection AI → Mo
 
 | 영역 | 선택 | 근거 |
 |---|---|---|
-| OS/실행 | macOS + Docker (Ubuntu 22.04 컨테이너), 보너스 구간만 EC2 g5.xlarge 스팟 | 비용 최소화, 재현성 |
-| ROS | ROS 2 Humble + Nav2 | 과제 지정, LTS |
-| 시뮬레이터 | Gazebo (Fortress/Harmonic) | 합의된 결정 규칙 |
-| 로봇 모델 | Unitree Go2 URDF (오픈소스) + CHAMP 컨트롤러 스택 | 검증된 4족 스택, 제출물 URDF 요건 직결 |
+| OS/실행 | macOS + Docker (Ubuntu 24.04 컨테이너, arm64 네이티브), 보너스 구간만 EC2 g5.xlarge 스팟 | 비용 최소화, 재현성 |
+| ROS | ROS 2 Jazzy + Nav2 | Phase 0 검증 결과: Humble은 arm64에 Gazebo 스택 미제공 (아래 결정 기록) |
+| 시뮬레이터 | Gazebo Harmonic (gz-sim8) | arm64 네이티브 공식 지원, Jazzy 표준 페어링 |
+| 로봇 모델 | Unitree Go2 URDF (오픈소스) + gz_ros2_control 기반 보행 스택 (CHAMP는 Jazzy 포팅 검증 후 채택) | 제출물 URDF 요건 직결 |
 | 언어 | Python 주력, stage3 MPC만 C++ | 과제 제약사항 |
 | AI/비전 | PyTorch, OpenCV, (RL: Isaac Lab 또는 Genesis on EC2) | 과제 지정 |
 | GUI 확인 | Foxglove Studio(Mac 네이티브, WebSocket 접속) + noVNC(Gazebo GUI 필요 시) | Mac에서 X11 포워딩보다 안정적 |
 | 대시보드 | rosbridge_suite + React(또는 Foxglove 커스텀 패널) + WebSocket | 보너스 ①과 필수 Monitoring System 통합 |
+
+> **Phase 0 결정 기록 (2026-08-31)**: 당초 Humble + Gazebo Classic으로 계획했으나 실측 결과
+> ① `osrf/ros:humble-desktop`은 amd64 전용이라 Apple Silicon에서 에뮬레이션 실행(빈 월드 RTF 0.5),
+> ② Humble arm64 저장소에는 Gazebo Classic도 `ros-gz-sim`도 빌드가 없음.
+> 반면 **Jazzy + Harmonic은 arm64에서 전체 스택(ros-gz-sim, gz-ros2-control, Nav2, Foxglove, rosbridge) 제공** → 채택.
+> 파급: CHAMP 등 Humble 기준 오픈소스는 Jazzy 포팅 검증이 필요 (Phase 2 리스크 표 참조).
 
 > **분기 지점 기록**: 이후 어떤 Phase에서든 EC2 상시 사용(C안)으로 전환하고 싶어지면,
 > §2.2 표의 "Isaac Sim 경로" 열을 따라 산출물 방향을 바꾸면 된다.
@@ -186,6 +192,7 @@ stage2/3는 실패해도 제출물에 영향이 없고, 성공하면 보고서·
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
+| CHAMP 등 4족 오픈소스 스택의 Jazzy 미지원 | Phase 2 stage1 계획 변경 | 커뮤니티 포크 검증 → 실패 시 gz_ros2_control + 자체 게이트 생성기(보행 궤적은 stage2 MPC 코드와 공유)로 대체 |
 | Apple Silicon에서 Gazebo 컨테이너 성능 저하 | 시뮬 실시간 계수 하락 | 물리 스텝 조정, headless 실행 + Foxglove, 필요 시 Rosetta/이미지 교체. 최악의 경우 EC2 CPU 인스턴스로 시뮬 이전(§2.2 분기표 참조) |
 | stage3 C++ MPC 미완성 | 없음 (stage1이 요건 충족) | 타임박스 10h 초과 시 중단하고 보고서에 시도·한계 기술 |
 | 제공 에셋 포맷 비호환 | Phase 1 지연 | Blender 변환 파이프라인 우선 검증, 불가 시 자체 모델링(과제 허용) |

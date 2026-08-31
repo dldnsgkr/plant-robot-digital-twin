@@ -10,8 +10,8 @@
 
 | 영역 | 스택 |
 |---|---|
-| Robot OS | ROS 2 Humble + Nav2 |
-| 시뮬레이터 | Gazebo Classic 11 (Docker, GPU 불필요) |
+| Robot OS | ROS 2 Jazzy + Nav2 |
+| 시뮬레이터 | Gazebo Harmonic (Docker arm64 네이티브, GPU 불필요) |
 | 언어 | Python (주력), C++ (MPC stage3) |
 | AI/비전 | PyTorch, OpenCV |
 | 시각화 | Foxglove Studio, noVNC, 웹 대시보드(rosbridge) |
@@ -28,12 +28,18 @@ docker compose up -d          # 컨테이너 기동
 docker compose exec sim bash  # 개발 셸 진입
 ```
 
-동작 확인:
+동작 확인 (자동 스모크 테스트):
 
 ```bash
-# 컨테이너 셸 안에서 — Gazebo 서버(headless) 실행
-gzserver --verbose /usr/share/gazebo-11/worlds/empty.world &
-ros2 topic list                        # /clock 등이 보이면 정상
+docker compose run --rm --no-deps sim bash /ws/src/plant_dt/docker/smoke_test.sh
+```
+
+수동 확인:
+
+```bash
+# 컨테이너 셸 안에서 — Gazebo Harmonic 서버(headless) 실행
+gz sim -s -r empty.sdf &
+gz topic -l                            # Gazebo 토픽이 보이면 정상
 
 # Foxglove 연결용 브리지
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml
@@ -41,7 +47,7 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 ```
 
 Gazebo GUI가 필요하면 브라우저에서 http://localhost:8080/vnc.html 접속 후
-컨테이너 셸에서 `gzclient` 실행.
+컨테이너 셸에서 `gz sim -g` 실행.
 
 ## 레포지토리 구조
 
@@ -62,8 +68,8 @@ docs/                 # 계획서·요구사항·보고서
 
 | 모듈 | 상태 | 실행 |
 |---|---|---|
-| Phase 0 환경 구축 | 진행 중 | 위 "환경 설정" 참조 |
-| Phase 1 Virtual Plant | 예정 | - |
+| Phase 0 환경 구축 | 완료 | 위 "환경 설정" 참조, 검증: `docker/smoke_test.sh` |
+| Phase 1 Virtual Plant | 완료 | `ros2 launch /ws/src/plant_dt/simulation/launch/plant_sim.launch.py` (컨테이너 안) → Foxglove로 ws://localhost:8765 접속 |
 | Module 1 Locomotion | 예정 | - |
 | Module 2 Inspection AI | 예정 | - |
 | Module 3 Gas/Safety | 예정 | - |
