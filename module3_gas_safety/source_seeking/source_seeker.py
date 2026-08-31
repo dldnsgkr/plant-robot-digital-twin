@@ -38,6 +38,9 @@ class SourceSeeker(Node):
     def __init__(self):
         super().__init__("source_seeker")
         self.declare_parameter("enabled", True)
+        # 통합 시나리오: 가스 알람(/gas/alarm)을 받아야 탐색 시작
+        self.declare_parameter("wait_alarm", False)
+        self.alarmed = False
         self.samples = deque(maxlen=40)   # (x, y, C) @5Hz → 8s 윈도
         self.pose = None                  # (x, y, yaw)
         self.conc = 0.0
@@ -61,6 +64,12 @@ class SourceSeeker(Node):
         self.create_subscription(PointCloud2, "/lidar/points", self._on_cloud, 1)
         self.create_subscription(Bool, "/rth_active", self._on_rth, 1)
         self.create_subscription(Vector3, "/gas/wind", self._on_wind, 1)
+        self.create_subscription(Bool, "/gas/alarm", self._on_alarm, 1)
+
+    def _on_alarm(self, msg):
+        if msg.data and not self.alarmed:
+            self.alarmed = True
+            self.get_logger().info("가스 알람 수신 — 누출원 탐색 시작")
         self.create_timer(0.1, self._step)
         self._dbg = ("-", 0.0)
         self.create_timer(2.0, self._debug)
@@ -128,6 +137,8 @@ class SourceSeeker(Node):
         if self.done or self.rth or self.pose is None \
                 or not self.get_parameter("enabled").value:
             return
+        if self.get_parameter("wait_alarm").value and not self.alarmed:
+            return
         cmd = Twist()
 
         # 발견 판정: 임계 농도 2초 지속
@@ -194,24 +205,19 @@ class SourceSeeker(Node):
             else:
                 # CLIMB: 약한 신호 — 농도 구배 상승으로 플룸 탐색
                 gx, gy = grad
-            # 무회전 전방향 주행: 이 게이트의 회전은 병진을 크게 오염시키므로
-            # (격리 실험으로 확인) 요는 게이트 홀드에 맡기고, 월드 목표
-            # 방향을 몸좌표 게걸음 (vx,vy)로 변환해 이동한다. 방향은 매 주기
-            # 재계산되는 폐루프라 잔여 기생 결합도 자체 수렴한다.
-            gn = math.hypot(gx, gy)
-            dx, dy = gx / gn, gy / gn
-            cy, sy = math.cos(self.pose[2]), math.sin(self.pose[2])
-            cmd.linear.x = V_WALK * (cy * dx + sy * dy)
-            cmd.linear.y = V_WALK * (-sy * dx + cy * dy)
+            # 헤딩 조향: 목표 방위로 회전하며 전진
+            target = math.atan2(gy, gx)
+            err = math.atan2(math.sin(target - self.pose[2]),
+                             math.cos(target - self.pose[2]))
+            cmd.linear.x = V_WALK * max(0.0, math.cos(err))
+            cmd.angular.z = max(-0.4, min(0.4, 1.0 * err))
             self.cast_t = 0.0
-            self._dbg = ("SURGE" if in_plume else "CLIMB",
-                         math.atan2(gy, gx))
+            self._dbg = ("SURGE" if in_plume else "CLIMB", target)
         else:
-            # CAST: 몸좌표 원형 게걸음 (회전 없이 원을 그리며 플룸 탐색)
+            # CAST: 확장 나선 (갈수록 큰 원으로 플룸 탐색)
             self.cast_t += 0.1
-            w = 0.35 / (1.0 + 0.06 * self.cast_t)    # 갈수록 큰 원
-            cmd.linear.x = V_WALK * math.cos(w * self.cast_t)
-            cmd.linear.y = V_WALK * math.sin(w * self.cast_t)
+            cmd.linear.x = V_WALK
+            cmd.angular.z = 0.4 / (1.0 + 0.1 * self.cast_t)
             self._dbg = ("CAST", 0.0)
 
         self._avoid_and_publish(cmd)

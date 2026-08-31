@@ -10,9 +10,7 @@
   로봇의 기하학적 최단 경로가 장애물을 우회하도록 보장.
 
 추종:
-  waypoint를 축 정렬 게걸음으로 폐루프 추종 — 이 게이트는 대각(vx+vy 동시)
-  이동에서 기생 결합이 커서, 검증된 두 프리미티브(순수 전진 / 순수 측방)만
-  번갈아 사용한다(몸좌표 오차의 큰 축 우선, 1.5s 유지로 채터링 방지).
+  waypoint 헤딩 조향 — 목표 방위 오차에 P 회전 + 정렬도에 비례한 전진.
 
 토픽: /robot/battery(Float32), /rth_active(Bool — source_seeker 양보),
       /cmd_vel, 도킹 완료 시 /robot/docked(Bool)
@@ -141,11 +139,15 @@ class Rth(Node):
         self.pub_bat.publish(Float32(data=self.battery))
 
         now = self.get_clock().now().nanoseconds * 1e-9
-        # 통신 음영 (복도 깊숙) 체류 감지
+        # 통신 음영 (복도 깊숙) 진입 감지 — 구역 밖에 있다가 '진입'한 경우만
+        # (배치 직후 구역 안에서 시작하는 경우의 오발동 방지)
         in_shadow = self.pose is not None and self.pose[0] > 48.0
-        if in_shadow and self.shadow_since is None:
-            self.shadow_since = now
-        elif not in_shadow:
+        if not in_shadow and self.pose is not None:
+            self.shadow_armed = True
+        if in_shadow and getattr(self, "shadow_armed", False):
+            if self.shadow_since is None:
+                self.shadow_since = now
+        else:
             self.shadow_since = None
 
         low_batt = self.battery < 20.0
@@ -180,20 +182,12 @@ class Rth(Node):
             self.pub_dock.publish(Bool(data=True))
             self.get_logger().info("충전 스테이션 도킹 완료 (오차 %.2fm)" % d_goal)
             return
-        # 몸좌표 오차 → 축 정렬 이동 (1.5s 유지)
-        cy, sy = math.cos(yaw), math.sin(yaw)
-        ex = cy * dx + sy * dy
-        ey = -sy * dx + cy * dy
-        now = self.get_clock().now().nanoseconds * 1e-9
-        if now - getattr(self, "_axis_t", 0.0) > 1.5:
-            self._axis = "x" if abs(ex) > abs(ey) else "y"
-            self._axis_t = now
+        # 헤딩 조향: 목표 방위로 회전하며 전진 (정렬 오차에 따라 감속)
+        target = math.atan2(dy, dx)
+        err = math.atan2(math.sin(target - yaw), math.cos(target - yaw))
         cmd = Twist()
-        if self._axis == "x":
-            # 후진은 요 불안정이 커서 저속으로 제한
-            cmd.linear.x = min(V_WALK, max(-0.1, V_WALK * (1 if ex > 0 else -1)))
-        else:
-            cmd.linear.y = 0.15 * (1 if ey > 0 else -1)
+        cmd.linear.x = V_WALK * max(0.0, math.cos(err))
+        cmd.angular.z = max(-0.4, min(0.4, 1.0 * err))
         self.pub_cmd.publish(cmd)
 
 

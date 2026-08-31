@@ -125,17 +125,17 @@ class GaitController(Node):
         self.create_subscription(Imu, "/imu", self._on_imu, 50)
         self.create_timer(2.0, self._debug)
 
-    def _debug(self):
-        self.get_logger().info(
-            "dbg lift=%.3f body_h=%.3f roll=%.2f pitch=%.2f wz_corr=%.2f active=%s"
-            % (self.terrain_lift, self.body_h, self.roll, self.pitch,
-               self.wz_corr, self.active))
-
         rate = self.get_parameter("rate_hz").value
         self.dt = 1.0 / rate
         self.create_timer(self.dt, self._step)
         self.get_logger().info("gait_controller 시작 (gait=%s)"
                                % self.get_parameter("gait").value)
+
+    def _debug(self):
+        self.get_logger().info(
+            "dbg lift=%.3f body_h=%.3f roll=%.2f pitch=%.2f wz_corr=%.2f active=%s"
+            % (self.terrain_lift, self.body_h, self.roll, self.pitch,
+               self.wz_corr, self.active))
 
     def _on_cmd(self, msg):
         self.cmd = msg
@@ -242,7 +242,8 @@ class GaitController(Node):
         step_y = vy_leg * t_stance / 2.0
 
         p = (phase + gait["offset"][leg]) % 1.0
-        if p < duty:                          # 지지: 앞→뒤로 밀기
+        in_stance = p < duty
+        if in_stance:                         # 지지: 앞→뒤로 밀기
             self.swing_frozen[leg] = None
             s = p / duty                      # 0→1
             x = step_x * (1 - 2 * s)
