@@ -70,7 +70,8 @@ docs/                 # 계획서·요구사항·보고서
 |---|---|---|
 | Phase 0 환경 구축 | 완료 | 위 "환경 설정" 참조, 검증: `docker/smoke_test.sh` |
 | Phase 1 Virtual Plant | 완료 | `ros2 launch /ws/src/plant_dt/simulation/launch/plant_sim.launch.py` (컨테이너 안) → Foxglove로 ws://localhost:8765 접속 |
-| Module 1 Locomotion | 예정 | - |
+| Module 1 Locomotion (stage1) | 완료 | 컨테이너에서 launch 후 `python3 module1_locomotion/stage1_gait_controller/gait_controller.py`, `.../terrain_mapping/elevation_map.py`, `.../fall_recovery/fall_recovery.py` 실행, `/cmd_vel`로 조종 |
+| Module 1 MPC (stage2/3) | 예정 | - |
 | Module 2 Inspection AI | 예정 | - |
 | Module 3 Gas/Safety | 예정 | - |
 | 통합 시나리오 | 예정 | - |
