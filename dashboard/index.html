@@ -30,7 +30,9 @@
            letter-spacing:.05em; color:var(--dim); background:#0a0f16;
            border:1px solid var(--line); }
   .achip.active { color:#fff; background:var(--bad); border-color:var(--bad);
-                  animation:blink 1s step-end infinite; }
+                  animation:blink 1s step-end infinite; cursor:pointer; }
+  .achip.acked { color:#fff; background:#7a3030; border-color:#7a3030;
+                 animation:none; }
   @keyframes blink { 50% { filter:brightness(.6); } }
   #clock { font-family:var(--mono); font-size:13px; color:var(--accent);
            min-width:150px; text-align:right; }
@@ -80,12 +82,24 @@
   #gasRow .head b { color:var(--tx); font:700 13px var(--mono); }
   #spark { width:100%; height:44px; }
 
-  /* 우측 하단: 이벤트 */
+  /* 라이브 피드 */
+  #feeds { display:grid; grid-template-columns:1fr 1fr; gap:6px;
+           padding:8px 10px; }
+  #feeds figure { margin:0; }
+  #feeds img { width:100%; border-radius:4px; background:#0a0f16;
+               border:1px solid var(--line); min-height:80px; }
+  #feeds figcaption { font-size:10px; color:var(--dim); text-align:center;
+                      letter-spacing:.08em; margin-top:2px; }
+
+  /* 이벤트 로그 (릴레이 이력 — 늦게 접속해도 복원) */
   #eventPanel ul { list-style:none; overflow-y:auto; flex:1;
                    padding:6px 12px; font-size:11.5px; }
   #eventPanel li { padding:3px 0; border-bottom:1px dashed #17202e;
                    color:var(--dim); font-family:var(--mono); }
+  #eventPanel li.alarm { color:var(--bad); }
+  #eventPanel li.ack { color:var(--accent); }
   #eventPanel li:first-child { color:var(--tx); }
+  #eventPanel li.alarm:first-child { color:var(--bad); }
 </style>
 </head>
 <body>
@@ -129,6 +143,13 @@
       <div id="gasRow">
         <div class="head"><span>GAS CONCENTRATION</span><b id="vGas">— ppm</b></div>
         <canvas id="spark" width="632" height="88"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Live Feeds — 로봇 시점</h2>
+      <div id="feeds">
+        <figure><img id="feedCam" alt="camera"><figcaption>전방 카메라</figcaption></figure>
+        <figure><img id="feedTh" alt="thermal"><figcaption>열화상</figcaption></figure>
       </div>
     </div>
   </div>
@@ -336,32 +357,57 @@ sub('/inspection/gauge_value','std_msgs/msg/Float32', m => {
 sub('/inspection/max_temp','std_msgs/msg/Float32', m => {
   tempV = m.data;
   document.getElementById('vT').textContent = m.data.toFixed(1);
-  document.getElementById('alHeat').className =
-    'achip' + (m.data > 60 ? ' active' : ''); }, 500);
+  setAlarm('alHeat', 'OVERHEAT', m.data > 60); }, 500);
 sub('/robot/battery','std_msgs/msg/Float32', m => {
   batV = m.data;
   document.getElementById('vB').textContent = m.data.toFixed(0);
-  document.getElementById('alBat').className =
-    'achip' + (m.data < 20 ? ' active' : ''); }, 500);
+  setAlarm('alBat', 'BATTERY', m.data < 20); }, 500);
 sub('/gas/concentration','std_msgs/msg/Float32', m => {
   document.getElementById('vGas').textContent = m.data.toFixed(1) + ' ppm';
   gasHist.push(m.data); if (gasHist.length > 140) gasHist.shift();
   drawSpark();
-  document.getElementById('alGas').className =
-    'achip' + (m.data > 30 ? ' active' : ''); }, 400);
+  setAlarm('alGas', 'GAS', m.data > 30); }, 400);
 
+// ═══ 이벤트 이력 (릴레이 latched — 늦게 접속해도 전체 복원) ═══
 const ev = document.getElementById('events');
-const addEvent = t => {
-  const li = document.createElement('li');
-  li.textContent = new Date().toLocaleTimeString('ko-KR',{hour12:false})
-    + '  ' + t;
-  ev.prepend(li);
-  while (ev.children.length > 40) ev.lastChild.remove();
-};
-sub('/mission/event','std_msgs/msg/String', m => addEvent(m.data));
-sub('/gas/found','std_msgs/msg/Bool', m => m.data && addEvent('🚨 가스 누출원 발견 보고'));
-sub('/robot/docked','std_msgs/msg/Bool', m => m.data && addEvent('🔌 충전 스테이션 도킹 완료'));
-addEvent('관제센터 콘솔 기동');
+sub('/dashboard/events', 'std_msgs/msg/String', m => {
+  let list;
+  try { list = JSON.parse(m.data); } catch { return; }
+  ev.innerHTML = '';
+  for (const e of list.slice().reverse()) {
+    const li = document.createElement('li');
+    li.className = e.type || '';
+    li.textContent = e.t + '  ' + e.text;
+    ev.appendChild(li);
+  }
+});
+
+// ═══ 라이브 피드 (릴레이 JPEG 썸네일) ═══
+const feed = (topic, imgId) => sub(topic, 'sensor_msgs/msg/CompressedImage',
+  m => { document.getElementById(imgId).src =
+           'data:image/jpeg;base64,' + m.data; }, 400);
+feed('/dashboard/cam/compressed', 'feedCam');
+feed('/dashboard/thermal/compressed', 'feedTh');
+
+// ═══ 알람 확인(ACK): 점멸 칩 클릭 → 확인 발행, 점등 유지·점멸 중지 ═══
+const ackPub = new ROSLIB.Topic({ros, name:'/dashboard/ack',
+                                 messageType:'std_msgs/msg/String'});
+const acked = {};
+for (const [id, key] of [['alGas','GAS'],['alHeat','OVERHEAT'],
+                          ['alBat','BATTERY']]) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => {
+    if (!el.classList.contains('active')) return;
+    acked[key] = true;
+    el.classList.add('acked');
+    ackPub.publish(new ROSLIB.Message({data:key}));
+  });
+}
+function setAlarm(id, key, on) {
+  const el = document.getElementById(id);
+  if (!on) { acked[key] = false; el.className = 'achip'; return; }
+  el.className = 'achip active' + (acked[key] ? ' acked' : '');
+}
 </script>
 </body>
 </html>

@@ -57,6 +57,8 @@ def generate_launch_description():
             py("module3_gas_safety/gas_simulation/gas_field.py"),
             py("module3_gas_safety/source_seeking/source_seeker.py",
                "--ros-args", "-p", "wait_alarm:=true"),
+            # 관제 텔레메트리 릴레이 (라이브 피드·이벤트 이력·알람 ack)
+            py("dashboard/telemetry_relay.py"),
         ]),
         TimerAction(period=17.0, actions=[
             ExecuteProcess(

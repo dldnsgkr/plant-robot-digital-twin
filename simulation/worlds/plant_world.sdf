@@ -278,6 +278,20 @@
       </link>
     </model>
 
+
+    <!-- 스팀 트랩 ST-7 (Module 2 과열 데모 — 미션 경로에서 시야에 들어옴) -->
+    <model name="steam_trap">
+      <static>true</static>
+      <pose>28 1.45 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>0.25 0.25 0.4</size></box></geometry></collision>
+        <visual name="body_v"><geometry><box><size>0.25 0.25 0.4</size></box></geometry>
+          <material><ambient>0.45 0.4 0.35 1</ambient><diffuse>0.45 0.4 0.35 1</diffuse></material></visual>
+        <visual name="valve_v"><pose>0 -0.15 0.1 1.5708 0 0</pose>
+          <geometry><cylinder><radius>0.06</radius><length>0.1</length></cylinder></geometry>
+          <material><ambient>0.6 0.15 0.1 1</ambient><diffuse>0.6 0.15 0.1 1</diffuse></material></visual>
+      </link>
+    </model>
     <!-- ============ 충전 스테이션 (Module 3 Return-to-Home 목표점) ============ -->
     <model name="charging_station">
       <static>true</static>
