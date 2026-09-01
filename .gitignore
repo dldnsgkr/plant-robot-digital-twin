@@ -11,3 +11,6 @@ __pycache__/
 # 대용량 에셋 원본 (다운로드로 재획득)
 simulation/assets/*.zip
 .logs/
+.build/
+.install/
+.colcon_log/

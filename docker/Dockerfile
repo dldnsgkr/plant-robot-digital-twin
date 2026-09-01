@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rosbridge-server \
     ros-jazzy-tf-transformations \
     ros-jazzy-rmw-cyclonedds-cpp \
+    ros-jazzy-osqp-vendor \
+    ros-jazzy-eiquadprog \
+    libeigen3-dev \
     python3-pip \
     python3-colcon-common-extensions \
     python3-opencv \

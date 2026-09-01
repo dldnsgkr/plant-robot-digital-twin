@@ -47,6 +47,9 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="false"),
         DeclareLaunchArgument("foxglove", default_value="true"),
+        # stage3 토크 제어: controller:=joint_group_effort_controller
+        DeclareLaunchArgument("controller",
+                              default_value="joint_group_position_controller"),
 
         # Gazebo 서버 (물리 + 센서)
         ExecuteProcess(
@@ -100,7 +103,7 @@ def generate_launch_description():
                     package="controller_manager",
                     executable="spawner",
                     arguments=["joint_state_broadcaster",
-                               "joint_group_position_controller"],
+                               LaunchConfiguration("controller")],
                     output="screen",
                 ),
             ],

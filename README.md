@@ -87,7 +87,7 @@ docs/                 # 계획서·요구사항·보고서
 | Phase 1 Virtual Plant | 완료 | `ros2 launch /ws/src/plant_dt/simulation/launch/plant_sim.launch.py` (컨테이너 안) → Foxglove로 ws://localhost:8765 접속 |
 | Module 1 Locomotion (stage1) | 완료 | 컨테이너에서 launch 후 `python3 module1_locomotion/stage1_gait_controller/gait_controller.py`, `.../terrain_mapping/elevation_map.py`, `.../fall_recovery/fall_recovery.py` 실행, `/cmd_vel`로 조종 |
 | Module 1 MPC stage2 (LIP-MPC) | 완료 | launch 후 `python3 module1_locomotion/stage2_simple_mpc_py/mpc_node.py` — 게이트와 병행 실행, 튜닝 기록은 stage2_simple_mpc_py/TUNING.md |
-| Module 1 MPC stage3 (C++ Convex) | 미착수 (도전 과제) | stage2 TUNING.md의 결론(토크 제어 필요)이 설계 출발점 |
+| Module 1 MPC stage3 (C++ Convex) | 부분 완료 (도전 과제) | 토크 제어 기립·유지 실증, 빌드·실행: stage3_convex_mpc_cpp/STATUS.md |
 | Module 2 Inspection AI | 완료 | launch 후 gauge_reader/plant_process/image_degrader, thermal_camera_sim/thermal_fusion 실행. 정확도: `eval_accuracy.py`, 순찰 경로: `patrol_planner.py` |
 | Module 3 Gas/Safety | 완료 | 통합 launch에 포함, 상태: module3_gas_safety/STATUS.md |
 | 보너스① 웹 대시보드 | 완료 | Phase 5 관제 화면과 통합 구현 |

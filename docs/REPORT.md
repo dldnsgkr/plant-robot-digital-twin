@@ -87,7 +87,11 @@ Pose_V→TFMessage 브리지가 엔티티 이름을 소실해 하위 노드가 �
 
 ## 4. 남은 항목·확장 계획
 
-- stage3 Convex MPC(C++): 타임박스 도전 과제 (stage2 결론이 설계 근거)
+- stage3 Convex MPC(C++): **부분 달성** — SRBD 응축 MPC(N=10, 마찰원뿔 제약,
+  EiquadprogFast 25Hz 1400회+ 무실패) + 순수 토크 제어로 기립·정지 유지
+  (z=0.33, GRF 비대칭 분배 fz≈mg) 실증. 한계(기립 초기조건 의존, 수평 지속
+  외란 시 '자세가중>위치가중 → QP가 fz 최소화 선택' 구조 규명)와 해법은
+  stage3_convex_mpc_cpp/STATUS.md
 - Nav2 정식 통합(현재 자체 A*), 계단 등반(crawl 튜닝)
 - 보너스: 웹 대시보드 ✓ / **다중 로봇 협업 ✓** — go2(복도)·go2b(공장) 구역
   분할 동시 순찰 실증(2호기는 네임스페이스 분리 ros2_control + 경량 URDF,

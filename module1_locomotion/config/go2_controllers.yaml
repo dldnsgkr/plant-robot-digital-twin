@@ -9,6 +9,26 @@ controller_manager:
     joint_group_position_controller:
       type: position_controllers/JointGroupPositionController
 
+    # stage3 토크 제어용 (stage3 launch에서만 활성 — position과 동시 활성 금지)
+    joint_group_effort_controller:
+      type: effort_controllers/JointGroupEffortController
+
+joint_group_effort_controller:
+  ros__parameters:
+    joints:
+      - FL_hip_joint
+      - FL_thigh_joint
+      - FL_calf_joint
+      - FR_hip_joint
+      - FR_thigh_joint
+      - FR_calf_joint
+      - RL_hip_joint
+      - RL_thigh_joint
+      - RL_calf_joint
+      - RR_hip_joint
+      - RR_thigh_joint
+      - RR_calf_joint
+
 joint_group_position_controller:
   ros__parameters:
     # 게이트 생성기가 이 순서로 12관절 목표각을 발행한다

@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>stage3_convex_mpc</name>
+  <version>0.1.0</version>
+  <description>
+    stage3: SRBD Convex MPC 보행/균형 제어기 (C++, 토크 제어).
+    MIT Cheetah 방식 — 예측 구간의 지면반력(GRF)을 마찰원뿔 제약 QP로 최적화.
+  </description>
+  <maintainer email="dldnsgkr3326@gmail.com">leeunhak</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>eigen</depend>
+  <depend>eiquadprog</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

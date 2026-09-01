@@ -80,6 +80,7 @@ for leg in ('FL', 'FR', 'RL', 'RR'):
     for part in ('hip', 'thigh', 'calf'):
         joints.append(f'''    <joint name="{leg}_{part}_joint">
       <command_interface name="position"/>
+      <command_interface name="effort"/>
       <state_interface name="position"><param name="initial_value">{STAND[part]}</param></state_interface>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
