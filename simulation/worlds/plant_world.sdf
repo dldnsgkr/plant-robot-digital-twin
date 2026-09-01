@@ -119,14 +119,14 @@
     </model>
 
     <!-- ============ 복도 험지 장애물 3개 (지진으로 널린 파이프) ============
-         pipe_1: 낮은 파이프(0.12m) 전폭 차단 — 지형 적응 보행으로 '넘는' 대상
+         pipe_1: 낮은 파이프(0.07m) 전폭 차단 — 지형 적응 보행으로 '넘는' 대상
          pipe_2/3: 굵은 파이프 부분 차단 — Nav2 코스트맵으로 '우회'하는 대상 -->
     <model name="corridor_pipe_1">
       <static>true</static>
-      <pose>20 0 0.06 1.5708 0 0</pose>
+      <pose>20 0 0.035 1.5708 0 0</pose>
       <link name="link">
-        <collision name="c"><geometry><cylinder><radius>0.06</radius><length>3.4</length></cylinder></geometry></collision>
-        <visual name="v"><geometry><cylinder><radius>0.06</radius><length>3.4</length></cylinder></geometry>
+        <collision name="c"><geometry><cylinder><radius>0.035</radius><length>3.4</length></cylinder></geometry></collision>
+        <visual name="v"><geometry><cylinder><radius>0.035</radius><length>3.4</length></cylinder></geometry>
           <material><ambient>0.5 0.35 0.2 1</ambient><diffuse>0.5 0.35 0.2 1</diffuse></material></visual>
       </link>
     </model>
