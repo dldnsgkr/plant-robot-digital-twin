@@ -163,7 +163,7 @@ class Mission(Node):
             if self.found:
                 self._event("누출원 탐지 보고 수신")
                 self.state, self.t_state = "WAIT_RTH", 0.0
-            elif self.t_state > 150.0:
+            elif self.t_state > 300.0:
                 self._event("탐색 타임아웃 — 복귀 대기로 전환")
                 self.state, self.t_state = "WAIT_RTH", 0.0
 

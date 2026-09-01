@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# go2_description 원본 URDF → Gazebo Harmonic 스폰용 go2_sim.urdf 생성
-# 1) package:// URI를 model:// 로 변환 (GZ_SIM_RESOURCE_PATH 로 해석)
-# 2) 시뮬레이션 센서 부착: LiDAR, RGB 카메라, Depth 카메라, IMU
-# 3) ros2_control(12관절 position 인터페이스) + gz_ros2_control 플러그인 주입
+# go2_description 원본 URDF → Gazebo Harmonic 스폰용 URDF 생성 (두 벌)
+#   go2_sim.urdf        : position 명령 인터페이스만 (기본 — Phase1~5, 미션)
+#   go2_sim_effort.urdf : position+effort 이중 인터페이스 (stage3 토크 제어)
+# 분리 이유: effort 인터페이스가 등록만 되어 있어도(미클레임 기본 0 토크)
+# position 보행의 지지력이 간헐적으로 약해져 전복이 발생함을 실측으로 확인.
+# 1) package:// → model:// 변환  2) 센서 부착  3) ros2_control 주입
 set -e
 cd "$(dirname "$0")"
 
 SRC=go2_description/urdf/go2_description.urdf
-OUT=go2_sim.urdf
 
-sed 's|package://go2_description|model://go2_description|g' "$SRC" > "$OUT"
+sed 's|package://go2_description|model://go2_description|g' "$SRC" > go2_sim.urdf
+cp go2_sim.urdf go2_sim_effort.urdf
 
-# </robot> 직전에 센서 정의 삽입 (gz-sim은 <gazebo> 태그의 <sensor>를 SDF로 통과시킴)
-python3 - "$OUT" <<'EOF'
-import sys
-
+python3 - <<'EOF'
 sensors = '''
   <!-- ===== 시뮬레이션 센서 (Phase 1에서 부착) ===== -->
   <!-- 3D LiDAR: Module 1 Elevation Map 입력 -->
@@ -57,7 +56,7 @@ sensors = '''
       </camera>
       <always_on>1</always_on>
     </sensor>
-    <!-- Depth 카메라: 지형 인지 보조 + 열화상 정합 실험용 (별도 pose로 오프셋) -->
+    <!-- Depth 카메라: 지형 인지 보조 + 열화상 정합용 (3cm 베이스라인) -->
     <sensor name="depth_camera" type="depth_camera">
       <pose>0.05 0.03 0.02 0 0 0</pose>
       <update_rate>10</update_rate>
@@ -73,24 +72,26 @@ sensors = '''
   </gazebo>
 '''
 
-# 12관절 ros2_control 정의 — 초기값은 기립 자세 (hip 0, thigh 0.8, calf -1.6)
 STAND = {'hip': 0.0, 'thigh': 0.8, 'calf': -1.6}
-joints = []
-for leg in ('FL', 'FR', 'RL', 'RR'):
-    for part in ('hip', 'thigh', 'calf'):
-        joints.append(f'''    <joint name="{leg}_{part}_joint">
-      <command_interface name="position"/>
-      <command_interface name="effort"/>
-      <state_interface name="position"><param name="initial_value">{STAND[part]}</param></state_interface>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>''')
 
-ros2_control = '''
-  <!-- ===== ros2_control (Phase 2에서 주입) ===== -->
+def ros2_control_block(with_effort):
+    joints = []
+    for leg in ('FL', 'FR', 'RL', 'RR'):
+        for part in ('hip', 'thigh', 'calf'):
+            eff = '      <command_interface name="effort"/>\n' if with_effort else ''
+            joints.append(
+                f'    <joint name="{leg}_{part}_joint">\n'
+                f'      <command_interface name="position"/>\n'
+                f'{eff}'
+                f'      <state_interface name="position"><param name="initial_value">{STAND[part]}</param></state_interface>\n'
+                f'      <state_interface name="velocity"/>\n'
+                f'      <state_interface name="effort"/>\n'
+                f'    </joint>')
+    return '''
+  <!-- ===== ros2_control ===== -->
   <ros2_control name="GazeboSimSystem" type="system">
     <hardware><plugin>gz_ros2_control/GazeboSimSystem</plugin></hardware>
-''' + '\\n'.join(joints) + '''
+''' + '\n'.join(joints) + '''
   </ros2_control>
   <gazebo>
     <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
@@ -104,11 +105,10 @@ ros2_control = '''
   </gazebo>
 '''
 
-path = sys.argv[1]
-text = open(path).read()
-assert '</robot>' in text
-open(path, 'w').write(text.replace('</robot>', sensors + ros2_control + '</robot>'))
-print(f'{path}: 센서 + ros2_control 삽입 완료')
+for path, with_effort in (("go2_sim.urdf", False), ("go2_sim_effort.urdf", True)):
+    text = open(path).read()
+    assert '</robot>' in text
+    open(path, 'w').write(text.replace(
+        '</robot>', sensors + ros2_control_block(with_effort) + '</robot>'))
+    print(f'{path}: 생성 완료 (effort={with_effort})')
 EOF
-
-echo "생성 완료: $OUT"

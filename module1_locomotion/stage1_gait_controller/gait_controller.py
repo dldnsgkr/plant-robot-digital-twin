@@ -184,7 +184,7 @@ class GaitController(Node):
         h, hx_dbg, hy_dbg = 0.0, 0.0, 0.0
         try:
             for i in range(int((0.45 + half) / res), int((1.2 + half) / res)):
-                for j in range(int((-0.3 + half) / res), int((0.3 + half) / res)):
+                for j in range(int((-0.25 + half) / res), int((0.25 + half) / res)):
                     v = msg.data[i * n + j]
                     if v == v and v > h:
                         h, hx_dbg, hy_dbg = v, i * res - half, j * res - half
@@ -202,9 +202,10 @@ class GaitController(Node):
         self._h_prev = h
 
         # 장애물 상단 + 3cm 여유만큼 발을 든다 (지면 노이즈 3cm 무시).
-        # 상한 0.10: 그 이상은 관절 진폭이 커져 접지 타이밍이 무너진다(실험으로 확인).
-        # 더 높은 장애물은 '넘는' 대상이 아니라 Nav2 코스트맵으로 '우회'하는 대상.
-        new_lift = min(max(h_eff + 0.03, 0.0), 0.10) if h_eff > 0.03 else 0.0
+        # 상한 0.05: 격리 실험에서 리프트 0.10은 평지 트로트도 무너뜨림(경계
+        # 불안정 — 런마다 성패 갈림). 통과 대상은 ~7cm 잔해까지, 그 이상은
+        # '우회' 대상. 발동 임계 5cm: 파이프 끝단 스침·노이즈 오발동 방지.
+        new_lift = min(max(h_eff + 0.03, 0.0), 0.05) if h_eff > 0.05 else 0.0
         # 이력 유지(장애물이 근접 사각지대에 들어가도 수 초간 발 들기 유지, 반감기 ~5s)
         self.terrain_lift = max(new_lift, self.terrain_lift * 0.93)
         if self.terrain_lift < 0.01:

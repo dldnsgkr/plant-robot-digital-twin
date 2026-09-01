@@ -10,14 +10,26 @@ gz sim 서버(headless) + Go2 스폰 + gz↔ROS2 센서 브리지 + Foxglove 브
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
+from launch.actions import (DeclareLaunchArgument, ExecuteProcess,
+                            OpaqueFunction, TimerAction)
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 PKG_ROOT = "/ws/src/plant_dt/simulation"
 WORLD = os.path.join(PKG_ROOT, "worlds", "plant_world.sdf")
-ROBOT_URDF = os.path.join(PKG_ROOT, "models", "go2_sim.urdf")
+
+
+def robot_urdf(context):
+    """controller 인자에 따라 URDF 선택.
+
+    effort 인터페이스가 등록만 되어 있어도(미클레임 기본 0 토크) position
+    보행의 지지력이 간헐적으로 약해져 전복함을 실측 — 기본 URDF는 position
+    전용, stage3 토크 제어 시에만 이중 인터페이스 URDF를 쓴다.
+    """
+    ctl = LaunchConfiguration("controller").perform(context)
+    name = ("go2_sim_effort.urdf" if "effort" in ctl else "go2_sim.urdf")
+    return os.path.join(PKG_ROOT, "models", name)
 
 # 로봇 초기 위치: 복도 끝 (미션 시나리오 — 복도를 지나 공장으로 진입)
 SPAWN = {"x": "55.0", "y": "0.0", "z": "0.45"}
@@ -64,16 +76,15 @@ def generate_launch_description():
             output="screen",
         ),
 
-        # 월드 기동 후 로봇 스폰
-        TimerAction(
-            period=5.0,
-            actions=[
+        # 월드 기동 후 로봇 스폰 + TF (URDF는 controller 인자로 선택)
+        OpaqueFunction(function=lambda ctx: [
+            TimerAction(period=5.0, actions=[
                 Node(
                     package="ros_gz_sim",
                     executable="create",
                     arguments=[
                         "-world", "plant",
-                        "-file", ROBOT_URDF,
+                        "-file", robot_urdf(ctx),
                         "-name", "go2",
                         "-x", SPAWN["x"], "-y", SPAWN["y"], "-z", SPAWN["z"],
                         "-Y", "3.14159",  # 공장 방향(-x)을 바라보고 시작
@@ -81,19 +92,17 @@ def generate_launch_description():
                     additional_env=env,
                     output="screen",
                 ),
-            ],
-        ),
-
-        # 로봇 TF 발행 (/joint_states → TF 트리)
-        Node(
-            package="robot_state_publisher",
-            executable="robot_state_publisher",
-            parameters=[{
-                "robot_description": open(ROBOT_URDF).read(),
-                "use_sim_time": True,
-            }],
-            output="screen",
-        ),
+            ]),
+            Node(
+                package="robot_state_publisher",
+                executable="robot_state_publisher",
+                parameters=[{
+                    "robot_description": open(robot_urdf(ctx)).read(),
+                    "use_sim_time": True,
+                }],
+                output="screen",
+            ),
+        ]),
 
         # 컨트롤러 기동 (로봇 스폰 → gz_ros2_control 로드 후)
         TimerAction(
