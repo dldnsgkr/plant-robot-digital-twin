@@ -1,10 +1,25 @@
 # 플랜트 4족 보행 로봇 Digital Twin
 
 가상 발전소 환경(복도·공장·계단·험지)에서 4족 보행 로봇이 자율 주행하며
-아날로그 계기 판독, 열화상 점검, 가스 누출원 추적을 수행하는 Digital Twin 시스템.
+아날로그 계기 판독, 열화상 점검, 가스 누출원 추적, 자율 복귀를 수행하고
+웹 관제 대시보드로 실시간 감시하는 Digital Twin 시스템.
 
 - 과제 요구사항: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
 - 프로젝트 계획: [docs/PLAN.md](docs/PLAN.md)
+- **프로젝트 보고서: [docs/REPORT.md](docs/REPORT.md)**
+- 통신 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## 빠른 시작 — 통합 데모
+
+```bash
+cd docker && docker compose build            # 최초 1회 (10~20분)
+docker compose run --rm --no-deps --service-ports sim bash -c \
+  "source /opt/ros/jazzy/setup.bash && \
+   ros2 launch /ws/src/plant_dt/simulation/launch/plant_dt.launch.py \
+     mission:=true rth_start_pct:=50.0"
+# 브라우저에서 dashboard/index.html 열기 (rosbridge ws://localhost:9090)
+# → 복도 순찰 → 게이지 판독 → 공장 이동 → 배터리 20% → 자율 복귀 도킹
+```
 
 ## 기술 스택
 
@@ -72,7 +87,10 @@ docs/                 # 계획서·요구사항·보고서
 | Phase 1 Virtual Plant | 완료 | `ros2 launch /ws/src/plant_dt/simulation/launch/plant_sim.launch.py` (컨테이너 안) → Foxglove로 ws://localhost:8765 접속 |
 | Module 1 Locomotion (stage1) | 완료 | 컨테이너에서 launch 후 `python3 module1_locomotion/stage1_gait_controller/gait_controller.py`, `.../terrain_mapping/elevation_map.py`, `.../fall_recovery/fall_recovery.py` 실행, `/cmd_vel`로 조종 |
 | Module 1 MPC stage2 (LIP-MPC) | 완료 | launch 후 `python3 module1_locomotion/stage2_simple_mpc_py/mpc_node.py` — 게이트와 병행 실행, 튜닝 기록은 stage2_simple_mpc_py/TUNING.md |
-| Module 1 MPC stage3 (C++ Convex) | 예정 | - |
+| Module 1 MPC stage3 (C++ Convex) | 미착수 (도전 과제) | stage2 TUNING.md의 결론(토크 제어 필요)이 설계 출발점 |
 | Module 2 Inspection AI | 완료 | launch 후 gauge_reader/plant_process/image_degrader, thermal_camera_sim/thermal_fusion 실행. 정확도: `eval_accuracy.py`, 순찰 경로: `patrol_planner.py` |
 | Module 3 Gas/Safety | 완료 | 통합 launch에 포함, 상태: module3_gas_safety/STATUS.md |
+| 보너스① 웹 대시보드 | 완료 | Phase 5 관제 화면과 통합 구현 |
+| 보너스② 다중 로봇 협업 | 완료 | `python3 bonus/multi_robot/prepare_go2b.py` 후 `ros2 launch .../bonus/multi_robot/multi_robot.launch.py` — A=복도, B=공장 구역 분할 순찰 |
+| 보너스③ RL 보행 / ④ 클라우드 관제 | 미착수 (EC2 필요) | PLAN.md §2.2 분기표 참조 |
 | Phase 5 통합+관제 | 완료 | `ros2 launch .../plant_dt.launch.py mission:=true` + 브라우저로 dashboard/index.html (rosbridge :9090) |

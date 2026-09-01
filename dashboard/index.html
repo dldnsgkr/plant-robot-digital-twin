@@ -94,6 +94,7 @@ const px = x => (x - WORLD.x0) * S;
 const py = y => cv.height - (y - WORLD.y0) * S;
 
 let robot = null, gasGrid = null, trail = [];
+let robotB = null, trailB = [];   // 보너스②: 2호기
 
 function draw() {
   cx2.clearRect(0, 0, cv.width, cv.height);
@@ -132,15 +133,24 @@ function draw() {
     for (const [x, y] of trail) cx2.lineTo(px(x), py(y));
     cx2.stroke();
   }
+  // 2호기 궤적 (주황)
+  if (trailB.length > 1) {
+    cx2.strokeStyle = 'rgba(245,185,66,.5)'; cx2.lineWidth = 1.5;
+    cx2.beginPath(); cx2.moveTo(px(trailB[0][0]), py(trailB[0][1]));
+    for (const [x, y] of trailB) cx2.lineTo(px(x), py(y));
+    cx2.stroke();
+  }
   // 로봇 (방향 삼각형)
-  if (robot) {
-    const {x, y, yaw} = robot;
-    cx2.save(); cx2.translate(px(x), py(y)); cx2.rotate(-yaw);
-    cx2.fillStyle = '#7aa2ff';
+  const drawBot = (r, color) => {
+    if (!r) return;
+    cx2.save(); cx2.translate(px(r.x), py(r.y)); cx2.rotate(-r.yaw);
+    cx2.fillStyle = color;
     cx2.beginPath(); cx2.moveTo(10, 0); cx2.lineTo(-6, 6);
     cx2.lineTo(-6, -6); cx2.closePath(); cx2.fill();
     cx2.restore();
-  }
+  };
+  drawBot(robot, '#7aa2ff');
+  drawBot(robotB, '#f5b942');
   requestAnimationFrame(draw);
 }
 draw();
@@ -164,6 +174,17 @@ sub('/model/go2/odometry', 'nav_msgs/msg/Odometry', m => {
                                   trail.at(-1)[1]-robot.y) > 0.15) {
     trail.push([robot.x, robot.y]);
     if (trail.length > 800) trail.shift();
+  }
+}, 200);
+
+sub('/model/go2b/odometry', 'nav_msgs/msg/Odometry', m => {
+  const q = m.pose.pose.orientation;
+  robotB = { x: m.pose.pose.position.x, y: m.pose.pose.position.y,
+             yaw: Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z)) };
+  if (!trailB.length || Math.hypot(trailB.at(-1)[0]-robotB.x,
+                                   trailB.at(-1)[1]-robotB.y) > 0.15) {
+    trailB.push([robotB.x, robotB.y]);
+    if (trailB.length > 800) trailB.shift();
   }
 }, 200);
 
