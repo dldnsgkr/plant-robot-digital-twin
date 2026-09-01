@@ -8,6 +8,7 @@
 - 프로젝트 계획: [docs/PLAN.md](docs/PLAN.md)
 - **프로젝트 보고서: [docs/REPORT.md](docs/REPORT.md)**
 - 통신 구조: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 동료평가·심층 인터뷰 답변: [docs/INTERVIEW.md](docs/INTERVIEW.md)
 
 ## 빠른 시작 — 통합 데모
 

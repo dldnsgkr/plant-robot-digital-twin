@@ -2,232 +2,366 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>Plant Robot Digital Twin 관제</title>
+<title>Plant DT 관제센터</title>
 <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
 <style>
-  :root { --bg:#12161c; --panel:#1b2230; --line:#2c3648; --tx:#dbe4f0;
-          --dim:#8494ab; --ok:#3fce7c; --warn:#f5b942; --bad:#f2545b; }
-  * { box-sizing:border-box; margin:0; }
-  body { background:var(--bg); color:var(--tx);
-         font:14px/1.5 "Pretendard","Segoe UI",sans-serif; padding:16px; }
-  h1 { font-size:18px; margin-bottom:4px; }
-  #conn { font-size:12px; color:var(--dim); margin-bottom:12px; }
-  #conn.on { color:var(--ok); }
-  .grid { display:grid; grid-template-columns: 640px 1fr; gap:14px; }
+  :root {
+    --bg:#07090d; --panel:#0e131b; --panel2:#121926; --line:#1f2a3a;
+    --tx:#c9d6e8; --dim:#5f7189; --accent:#38bdf8; --ok:#34d399;
+    --warn:#fbbf24; --bad:#f87171; --mono:"SF Mono","Consolas",monospace;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--tx); overflow:hidden;
+         font:13px/1.45 "Pretendard","Segoe UI",sans-serif; }
+
+  /* ── 상단 상태 스트립 ── */
+  #topbar { height:46px; display:flex; align-items:center; gap:18px;
+            padding:0 16px; background:linear-gradient(#131b28,#0e131b);
+            border-bottom:1px solid var(--line); }
+  #topbar .brand { font-weight:800; letter-spacing:.04em; font-size:14px; }
+  #topbar .brand small { color:var(--dim); font-weight:400; margin-left:8px; }
+  .lamp { width:9px; height:9px; border-radius:50%; display:inline-block;
+          margin-right:6px; background:var(--dim); }
+  .lamp.on { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .lamp.err { background:var(--bad); box-shadow:0 0 6px var(--bad); }
+  #alarms { display:flex; gap:8px; margin-left:auto; }
+  .achip { padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700;
+           letter-spacing:.05em; color:var(--dim); background:#0a0f16;
+           border:1px solid var(--line); }
+  .achip.active { color:#fff; background:var(--bad); border-color:var(--bad);
+                  animation:blink 1s step-end infinite; }
+  @keyframes blink { 50% { filter:brightness(.6); } }
+  #clock { font-family:var(--mono); font-size:13px; color:var(--accent);
+           min-width:150px; text-align:right; }
+
+  /* ── 본문 그리드 ── */
+  #main { display:grid; grid-template-columns:1fr 340px;
+          grid-template-rows:1fr 185px; gap:10px; padding:10px;
+          height:calc(100% - 46px); }
   .panel { background:var(--panel); border:1px solid var(--line);
-           border-radius:10px; padding:12px; }
-  .panel h2 { font-size:13px; color:var(--dim); text-transform:uppercase;
-              letter-spacing:.08em; margin-bottom:8px; }
-  canvas { background:#0d1117; border-radius:6px; width:100%; }
-  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .tile { background:#141a26; border:1px solid var(--line); border-radius:8px;
-          padding:10px 12px; }
-  .tile .k { font-size:11px; color:var(--dim); }
-  .tile .v { font-size:22px; font-weight:700; margin-top:2px; }
-  .tile .v small { font-size:12px; color:var(--dim); font-weight:400; }
-  .badge { display:inline-block; padding:1px 8px; border-radius:10px;
-           font-size:11px; font-weight:700; }
-  .b-ok { background:#12321f; color:var(--ok); }
-  .b-warn { background:#3a2d10; color:var(--warn); }
-  .b-bad { background:#3a1214; color:var(--bad); }
-  #batbar { height:10px; background:#0d1117; border-radius:5px; margin-top:6px;
-            overflow:hidden; }
-  #batfill { height:100%; background:var(--ok); width:100%;
-             transition:width .5s; }
-  #events { list-style:none; font-size:12px; max-height:180px; overflow-y:auto; }
-  #events li { padding:3px 0; border-bottom:1px dashed var(--line);
-               color:var(--dim); }
-  #events li:first-child { color:var(--tx); }
-  .col { display:flex; flex-direction:column; gap:14px; }
+           border-radius:8px; overflow:hidden; display:flex;
+           flex-direction:column; }
+  .panel > h2 { font-size:10px; letter-spacing:.14em; color:var(--dim);
+                text-transform:uppercase; padding:8px 12px 6px;
+                border-bottom:1px solid var(--line); flex:none; }
+
+  /* 맵 (1행 좌측), 우측 열은 1~2행 전체, 이벤트는 2행 좌측 전폭 */
+  #mapPanel { grid-row:1; grid-column:1; }
+  #rightTop { grid-row:1 / 3; grid-column:2; }
+  #eventPanel { grid-row:2; grid-column:1; }
+  #mapWrap { flex:1; position:relative; }
+  #map { position:absolute; inset:0; width:100%; height:100%; }
+  #mapLegend { position:absolute; right:10px; bottom:8px; font-size:10px;
+               color:var(--dim); background:rgba(7,9,13,.7); padding:4px 8px;
+               border-radius:4px; }
+
+  /* 우측 상단: 미션 + 계기 */
+  #rightTop { display:flex; flex-direction:column; gap:10px; overflow:auto; }
+  #missionPanel .steps { padding:8px 12px; display:flex; flex-direction:column;
+                         gap:2px; }
+  .step { display:flex; align-items:center; gap:8px; padding:4px 6px;
+          border-radius:4px; color:var(--dim); font-size:12px; }
+  .step .dot { width:7px; height:7px; border-radius:50%;
+               background:var(--line); flex:none; }
+  .step.done { color:#7d93af; }
+  .step.done .dot { background:var(--ok); }
+  .step.now { color:#fff; background:#16202f; font-weight:700; }
+  .step.now .dot { background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  #gaugeRow { display:grid; grid-template-columns:repeat(3,1fr); gap:4px;
+              padding:8px 6px 4px; }
+  .gauge { text-align:center; }
+  .gauge canvas { width:92px; height:66px; }
+  .gauge .gv { font:700 15px var(--mono); margin-top:-6px; }
+  .gauge .gl { font-size:10px; color:var(--dim); letter-spacing:.08em; }
+  #gasRow { padding:4px 12px 10px; }
+  #gasRow .head { display:flex; justify-content:space-between;
+                  font-size:10px; color:var(--dim); letter-spacing:.1em; }
+  #gasRow .head b { color:var(--tx); font:700 13px var(--mono); }
+  #spark { width:100%; height:44px; }
+
+  /* 우측 하단: 이벤트 */
+  #eventPanel ul { list-style:none; overflow-y:auto; flex:1;
+                   padding:6px 12px; font-size:11.5px; }
+  #eventPanel li { padding:3px 0; border-bottom:1px dashed #17202e;
+                   color:var(--dim); font-family:var(--mono); }
+  #eventPanel li:first-child { color:var(--tx); }
 </style>
 </head>
 <body>
-<h1>🐕 플랜트 4족 로봇 Digital Twin 관제</h1>
-<div id="conn">rosbridge 연결 중… (ws://localhost:9090)</div>
-
-<div class="grid">
-  <div class="panel">
-    <h2>Virtual Plant — 로봇 위치 · 가스 농도장</h2>
-    <canvas id="map" width="1280" height="360"></canvas>
+<div id="topbar">
+  <span class="brand">⬢ PLANT DIGITAL TWIN<small>제어센터 · Turbine Hall A</small></span>
+  <span><span class="lamp" id="lampConn"></span><span id="connTxt">rosbridge</span></span>
+  <span><span class="lamp" id="lampRobot"></span>ROBOT</span>
+  <div id="alarms">
+    <span class="achip" id="alGas">GAS</span>
+    <span class="achip" id="alHeat">OVERHEAT</span>
+    <span class="achip" id="alBat">BATTERY</span>
   </div>
-  <div class="col">
+  <span id="clock">--:--:--</span>
+</div>
+
+<div id="main">
+  <div class="panel" id="mapPanel">
+    <h2>Plant Overview — 로봇 위치 · 이동 궤적 · 가스 농도장</h2>
+    <div id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="mapLegend">▲ 1호기 &nbsp; <span style="color:#f5b942">▲ 2호기</span>
+        &nbsp;·&nbsp; <span style="color:#ff9a3c">■ 가스 ppm</span></div>
+    </div>
+  </div>
+
+  <div id="rightTop">
+    <div class="panel" id="missionPanel">
+      <h2>Mission Sequencer</h2>
+      <div class="steps" id="steps"></div>
+    </div>
     <div class="panel">
-      <h2>미션</h2>
-      <div class="tiles">
-        <div class="tile"><div class="k">상태</div>
-          <div class="v" id="mstate">—</div></div>
-        <div class="tile"><div class="k">배터리</div>
-          <div class="v" id="bat">— %</div><div id="batbar"><div id="batfill"></div></div></div>
+      <h2>Process Instruments</h2>
+      <div id="gaugeRow">
+        <div class="gauge"><canvas id="gP" width="184" height="132"></canvas>
+          <div class="gv" id="vP">—</div><div class="gl">압력 bar</div></div>
+        <div class="gauge"><canvas id="gT" width="184" height="132"></canvas>
+          <div class="gv" id="vT">—</div><div class="gl">최고온도 ℃</div></div>
+        <div class="gauge"><canvas id="gB" width="184" height="132"></canvas>
+          <div class="gv" id="vB">—</div><div class="gl">배터리 %</div></div>
+      </div>
+      <div id="gasRow">
+        <div class="head"><span>GAS CONCENTRATION</span><b id="vGas">— ppm</b></div>
+        <canvas id="spark" width="632" height="88"></canvas>
       </div>
     </div>
-    <div class="panel">
-      <h2>점검 데이터 (Inspection)</h2>
-      <div class="tiles">
-        <div class="tile"><div class="k">압력계 판독</div>
-          <div class="v" id="gauge">— <small>bar</small></div></div>
-        <div class="tile"><div class="k">실제값 (truth)</div>
-          <div class="v" id="truth">— <small>bar</small></div></div>
-        <div class="tile"><div class="k">최고 온도</div>
-          <div class="v" id="temp">—</div></div>
-        <div class="tile"><div class="k">로봇 위치 가스 농도</div>
-          <div class="v" id="gasc">— <small>ppm</small></div></div>
-      </div>
-    </div>
-    <div class="panel">
-      <h2>이벤트</h2>
-      <ul id="events"></ul>
-    </div>
+  </div>
+
+  <div class="panel" id="eventPanel">
+    <h2>Event Log</h2>
+    <ul id="events"></ul>
   </div>
 </div>
 
 <script>
-// ---- 월드 기하 (plant_world.sdf와 동일) ----
+// ═══ 시계 ═══
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('ko-KR', {hour12:false});
+}, 500);
+
+// ═══ 미션 타임라인 ═══
+const STEPS = [
+  ['GOTO_GAUGE','복도 순찰 — 게이지 접근'],
+  ['ALIGN','게이지 방향 정렬'],
+  ['INSPECT','압력계 판독'],
+  ['GOTO_FACTORY','공장 구역 이동'],
+  ['SEEK','가스 누출원 탐색'],
+  ['WAIT_RTH','자율 복귀 · 도킹'],
+  ['DONE','미션 완료'],
+];
+const stepsEl = document.getElementById('steps');
+STEPS.forEach(([id, label]) => {
+  const d = document.createElement('div');
+  d.className = 'step'; d.id = 'st_' + id;
+  d.innerHTML = `<span class="dot"></span>${label}`;
+  stepsEl.appendChild(d);
+});
+function setMission(state) {
+  const i = STEPS.findIndex(s => s[0] === state);
+  STEPS.forEach(([id], k) => {
+    const el = document.getElementById('st_' + id);
+    el.className = 'step' + (k < i ? ' done' : k === i ? ' now' : '');
+  });
+}
+
+// ═══ 원형 게이지 위젯 (240° 아크) ═══
+function drawGauge(cv, val, min, max, zones) {
+  const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const cx = W/2, cy = H*0.78, r = W*0.36;
+  const a0 = Math.PI*1.2, a1 = Math.PI*(1.2-1.4);   // 216°→-36°... 240° 스윕
+  const ang = v => a0 - (a0-a1) * Math.min(Math.max((v-min)/(max-min),0),1);
+  c.clearRect(0,0,W,H);
+  // 구간 색 밴드
+  (zones||[[min,max,'#223047']]).forEach(([z0,z1,col]) => {
+    c.beginPath(); c.arc(cx,cy,r, Math.PI-ang(z0)+Math.PI, Math.PI-ang(z1)+Math.PI);
+    c.strokeStyle = col; c.lineWidth = 10; c.stroke();
+  });
+  // 눈금
+  c.strokeStyle = '#3a4a62'; c.lineWidth = 2;
+  for (let k = 0; k <= 8; k++) {
+    const a = Math.PI-ang(min+(max-min)*k/8)+Math.PI;
+    c.beginPath();
+    c.moveTo(cx+Math.cos(a)*(r+7), cy+Math.sin(a)*(r+7));
+    c.lineTo(cx+Math.cos(a)*(r+12), cy+Math.sin(a)*(r+12));
+    c.stroke();
+  }
+  // 바늘
+  if (val === null || isNaN(val)) return;
+  const a = Math.PI-ang(val)+Math.PI;
+  c.beginPath(); c.moveTo(cx,cy);
+  c.lineTo(cx+Math.cos(a)*(r-2), cy+Math.sin(a)*(r-2));
+  c.strokeStyle = '#e8eef7'; c.lineWidth = 3; c.stroke();
+  c.beginPath(); c.arc(cx,cy,4,0,7); c.fillStyle = '#e8eef7'; c.fill();
+}
+const Z = { p: [[0,7,'#1d4f46'],[7,9,'#5a4716'],[9,10,'#5a2424']],
+            t: [[20,60,'#1d4f46'],[60,75,'#5a4716'],[75,100,'#5a2424']],
+            b: [[0,20,'#5a2424'],[20,40,'#5a4716'],[40,100,'#1d4f46']] };
+let gaugeV = null, tempV = null, batV = null;
+setInterval(() => {
+  drawGauge(document.getElementById('gP'), gaugeV, 0, 10, Z.p);
+  drawGauge(document.getElementById('gT'), tempV, 20, 100, Z.t);
+  drawGauge(document.getElementById('gB'), batV, 0, 100, Z.b);
+}, 400);
+
+// ═══ 가스 스파크라인 ═══
+const gasHist = [];
+function drawSpark() {
+  const cv = document.getElementById('spark'), c = cv.getContext('2d');
+  c.clearRect(0,0,cv.width,cv.height);
+  c.strokeStyle = '#1f2a3a';
+  [0.25,0.5,0.75].forEach(f => { c.beginPath();
+    c.moveTo(0,cv.height*f); c.lineTo(cv.width,cv.height*f); c.stroke(); });
+  if (gasHist.length < 2) return;
+  const mx = Math.max(30, ...gasHist);
+  c.beginPath();
+  gasHist.forEach((v,i) => {
+    const x = i/(140-1)*cv.width, y = cv.height-(v/mx)*(cv.height-6)-3;
+    i ? c.lineTo(x,y) : c.moveTo(x,y);
+  });
+  c.strokeStyle = '#ff9a3c'; c.lineWidth = 2; c.stroke();
+}
+
+// ═══ 맵 ═══
 const WORLD = { x0:-13.5, x1:59, y0:-10, y1:10 };
 const OBS = [[8,2,.45],[-9,6,1.35],[5,5,.55],[-6,4,.8],[3,-5,.8],
              [-3,-3,1.4],[-9,-6,2.0],[10.6,-7,1.8]];
 const cv = document.getElementById('map'), cx2 = cv.getContext('2d');
-// 등방 스케일 (지도 왜곡 방지)
-const S = Math.min(cv.width / (WORLD.x1 - WORLD.x0),
-                   cv.height / (WORLD.y1 - WORLD.y0));
-const SX = S, SY = S;
-const px = x => (x - WORLD.x0) * S;
-const py = y => cv.height - (y - WORLD.y0) * S;
+let robot = null, robotB = null, gasGrid = null;
+const trail = [], trailB = [];
 
-let robot = null, gasGrid = null, trail = [];
-let robotB = null, trailB = [];   // 보너스②: 2호기
-
-function draw() {
-  cx2.clearRect(0, 0, cv.width, cv.height);
-  // 가스 농도장 (OccupancyGrid 50x36 @0.5m, origin -12.5,-9)
+function drawMap() {
+  const wrap = document.getElementById('mapWrap');
+  if (cv.width !== wrap.clientWidth) { cv.width = wrap.clientWidth;
+                                       cv.height = wrap.clientHeight; }
+  const S = Math.min(cv.width/(WORLD.x1-WORLD.x0),
+                     cv.height/(WORLD.y1-WORLD.y0));
+  const ox = (cv.width - S*(WORLD.x1-WORLD.x0))/2;
+  const oy = (cv.height - S*(WORLD.y1-WORLD.y0))/2;
+  const px = x => ox + (x-WORLD.x0)*S;
+  const py = y => cv.height - oy - (y-WORLD.y0)*S;
+  cx2.clearRect(0,0,cv.width,cv.height);
+  // 좌표 그리드 (5m)
+  cx2.strokeStyle = '#0e1520'; cx2.lineWidth = 1;
+  for (let gx = -10; gx <= 55; gx += 5) { cx2.beginPath();
+    cx2.moveTo(px(gx),py(WORLD.y0)); cx2.lineTo(px(gx),py(WORLD.y1)); cx2.stroke(); }
+  for (let gy = -10; gy <= 10; gy += 5) { cx2.beginPath();
+    cx2.moveTo(px(WORLD.x0),py(gy)); cx2.lineTo(px(WORLD.x1),py(gy)); cx2.stroke(); }
+  // 가스 농도장
   if (gasGrid) {
-    const {w, h, res, ox, oy, data} = gasGrid;
+    const {w,h,res,gx0,gy0,data} = gasGrid;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      const v = data[j * w + i];
-      if (v < 3) continue;
-      cx2.fillStyle = `rgba(255,${Math.max(0,180-v*2)},40,${Math.min(.55,v/90)})`;
-      cx2.fillRect(px(ox + i * res), py(oy + (j + 1) * res),
-                   res * SX + 1, res * SY + 1);
+      const v = data[j*w+i]; if (v < 3) continue;
+      cx2.fillStyle = `rgba(255,${Math.max(0,170-v*2)},40,${Math.min(.5,v/95)})`;
+      cx2.fillRect(px(gx0+i*res), py(gy0+(j+1)*res), res*S+1, res*S+1);
     }
   }
-  // 건물 외곽
-  cx2.strokeStyle = '#3b4a63'; cx2.lineWidth = 2;
-  cx2.strokeRect(px(-12.5), py(9), 25 * SX, 18 * SY);          // 공장
-  cx2.strokeRect(px(12.5), py(1.75), 45 * SX, 3.5 * SY);       // 복도
+  // 건물
+  cx2.strokeStyle = '#31435f'; cx2.lineWidth = 2;
+  cx2.strokeRect(px(-12.5), py(9), 25*S, 18*S);
+  cx2.strokeRect(px(12.5), py(1.75), 45*S, 3.5*S);
+  cx2.fillStyle = '#0b1119';
   // 장애물
-  cx2.fillStyle = '#2c3648';
-  for (const [x, y, r] of OBS) {
-    cx2.beginPath(); cx2.arc(px(x), py(y), r * SX, 0, 7); cx2.fill();
-  }
-  // 주요 지점
-  const mark = (x, y, c, t) => { cx2.fillStyle = c;
-    cx2.beginPath(); cx2.arc(px(x), py(y), 5, 0, 7); cx2.fill();
-    cx2.font = '11px sans-serif'; cx2.fillText(t, px(x) + 8, py(y) + 4); };
-  mark(11, 7.5, '#3fce7c', '충전소');
-  mark(38, 1.62, '#7aa2ff', '압력계');
-  mark(-9, 6, '#f5b942', '가스탱크');
-  mark(-9, -6, '#9a86e8', '공장기계');
-  // 이동 궤적
-  if (trail.length > 1) {
-    cx2.strokeStyle = 'rgba(122,162,255,.5)'; cx2.lineWidth = 1.5;
-    cx2.beginPath(); cx2.moveTo(px(trail[0][0]), py(trail[0][1]));
-    for (const [x, y] of trail) cx2.lineTo(px(x), py(y));
-    cx2.stroke();
-  }
-  // 2호기 궤적 (주황)
-  if (trailB.length > 1) {
-    cx2.strokeStyle = 'rgba(245,185,66,.5)'; cx2.lineWidth = 1.5;
-    cx2.beginPath(); cx2.moveTo(px(trailB[0][0]), py(trailB[0][1]));
-    for (const [x, y] of trailB) cx2.lineTo(px(x), py(y));
-    cx2.stroke();
-  }
-  // 로봇 (방향 삼각형)
-  const drawBot = (r, color) => {
-    if (!r) return;
-    cx2.save(); cx2.translate(px(r.x), py(r.y)); cx2.rotate(-r.yaw);
-    cx2.fillStyle = color;
-    cx2.beginPath(); cx2.moveTo(10, 0); cx2.lineTo(-6, 6);
-    cx2.lineTo(-6, -6); cx2.closePath(); cx2.fill();
-    cx2.restore();
-  };
-  drawBot(robot, '#7aa2ff');
-  drawBot(robotB, '#f5b942');
-  requestAnimationFrame(draw);
+  cx2.fillStyle = '#223047';
+  for (const [x,y,r] of OBS) { cx2.beginPath();
+    cx2.arc(px(x),py(y),r*S,0,7); cx2.fill(); }
+  // 주요 설비 마커
+  const mark = (x,y,c,t) => { cx2.fillStyle = c; cx2.beginPath();
+    cx2.arc(px(x),py(y),4,0,7); cx2.fill();
+    cx2.fillStyle = '#5f7189'; cx2.font = '10px sans-serif';
+    cx2.fillText(t, px(x)+7, py(y)+3); };
+  mark(11,7.5,'#34d399','충전소'); mark(38,1.62,'#38bdf8','압력계 PT-101');
+  mark(-9,6,'#fbbf24','가스탱크 TK-3'); mark(-9,-6,'#a78bfa','터빈 보조기기');
+  // 궤적
+  const drawTrail = (tr, col) => { if (tr.length < 2) return;
+    cx2.strokeStyle = col; cx2.lineWidth = 1.5; cx2.beginPath();
+    cx2.moveTo(px(tr[0][0]),py(tr[0][1]));
+    for (const [x,y] of tr) cx2.lineTo(px(x),py(y)); cx2.stroke(); };
+  drawTrail(trail,'rgba(56,189,248,.45)');
+  drawTrail(trailB,'rgba(245,185,66,.45)');
+  // 로봇
+  const bot = (r, col) => { if (!r) return;
+    cx2.save(); cx2.translate(px(r.x),py(r.y)); cx2.rotate(-r.yaw);
+    cx2.fillStyle = col; cx2.beginPath(); cx2.moveTo(11,0);
+    cx2.lineTo(-7,7); cx2.lineTo(-7,-7); cx2.closePath(); cx2.fill();
+    cx2.restore(); };
+  bot(robot,'#38bdf8'); bot(robotB,'#f5b942');
+  requestAnimationFrame(drawMap);
 }
-draw();
+drawMap();
 
-// ---- rosbridge ----
-const ros = new ROSLIB.Ros({url: 'ws://localhost:9090'});
-const conn = document.getElementById('conn');
-ros.on('connection', () => { conn.textContent = '● rosbridge 연결됨';
-                             conn.className = 'on'; });
-ros.on('close', () => { conn.textContent = '연결 끊김 — 재시도 중…';
-  conn.className = ''; setTimeout(() => ros.connect('ws://localhost:9090'), 2000); });
+// ═══ rosbridge ═══
+const ros = new ROSLIB.Ros({url:'ws://localhost:9090'});
+const lamp = document.getElementById('lampConn');
+ros.on('connection', () => { lamp.className = 'lamp on';
+  document.getElementById('connTxt').textContent = 'rosbridge 연결'; });
+ros.on('close', () => { lamp.className = 'lamp err';
+  document.getElementById('connTxt').textContent = '재연결 중…';
+  setTimeout(() => ros.connect('ws://localhost:9090'), 2000); });
 
 const sub = (name, type, cb, throttle) => new ROSLIB.Topic(
-  {ros, name, messageType: type, throttle_rate: throttle || 0}).subscribe(cb);
+  {ros, name, messageType:type, throttle_rate:throttle||0}).subscribe(cb);
+const yawOf = q => Math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z));
 
-sub('/model/go2/odometry', 'nav_msgs/msg/Odometry', m => {
-  const q = m.pose.pose.orientation;
-  robot = { x: m.pose.pose.position.x, y: m.pose.pose.position.y,
-            yaw: Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z)) };
+sub('/model/go2/odometry','nav_msgs/msg/Odometry', m => {
+  document.getElementById('lampRobot').className = 'lamp on';
+  const p = m.pose.pose;
+  robot = {x:p.position.x, y:p.position.y, yaw:yawOf(p.orientation)};
   if (!trail.length || Math.hypot(trail.at(-1)[0]-robot.x,
-                                  trail.at(-1)[1]-robot.y) > 0.15) {
-    trail.push([robot.x, robot.y]);
-    if (trail.length > 800) trail.shift();
-  }
+      trail.at(-1)[1]-robot.y) > 0.15) {
+    trail.push([robot.x,robot.y]); if (trail.length > 900) trail.shift(); }
 }, 200);
-
-sub('/model/go2b/odometry', 'nav_msgs/msg/Odometry', m => {
-  const q = m.pose.pose.orientation;
-  robotB = { x: m.pose.pose.position.x, y: m.pose.pose.position.y,
-             yaw: Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z)) };
+sub('/model/go2b/odometry','nav_msgs/msg/Odometry', m => {
+  const p = m.pose.pose;
+  robotB = {x:p.position.x, y:p.position.y, yaw:yawOf(p.orientation)};
   if (!trailB.length || Math.hypot(trailB.at(-1)[0]-robotB.x,
-                                   trailB.at(-1)[1]-robotB.y) > 0.15) {
-    trailB.push([robotB.x, robotB.y]);
-    if (trailB.length > 800) trailB.shift();
-  }
+      trailB.at(-1)[1]-robotB.y) > 0.15) {
+    trailB.push([robotB.x,robotB.y]); if (trailB.length > 900) trailB.shift(); }
 }, 200);
-
-sub('/gas/field', 'nav_msgs/msg/OccupancyGrid', m => {
-  gasGrid = { w: m.info.width, h: m.info.height, res: m.info.resolution,
-              ox: m.info.origin.position.x, oy: m.info.origin.position.y,
-              data: m.data };
+sub('/gas/field','nav_msgs/msg/OccupancyGrid', m => {
+  gasGrid = {w:m.info.width, h:m.info.height, res:m.info.resolution,
+             gx0:m.info.origin.position.x, gy0:m.info.origin.position.y,
+             data:m.data};
 }, 1000);
-
-const set = (id, t) => document.getElementById(id).textContent = t;
-sub('/mission/state', 'std_msgs/msg/String', m => set('mstate', m.data), 500);
-sub('/robot/battery', 'std_msgs/msg/Float32', m => {
-  set('bat', m.data.toFixed(0) + ' %');
-  const f = document.getElementById('batfill');
-  f.style.width = m.data + '%';
-  f.style.background = m.data < 20 ? 'var(--bad)'
-                     : m.data < 40 ? 'var(--warn)' : 'var(--ok)';
-}, 500);
-sub('/inspection/gauge_value', 'std_msgs/msg/Float32', m => {
-  document.getElementById('gauge').innerHTML =
-    m.data.toFixed(2) + ' <small>bar</small>'; }, 300);
-sub('/plant/gauge_pressure', 'std_msgs/msg/Float32', m => {
-  document.getElementById('truth').innerHTML =
-    m.data.toFixed(2) + ' <small>bar</small>'; }, 300);
-sub('/inspection/max_temp', 'std_msgs/msg/Float32', m => {
-  const el = document.getElementById('temp');
-  el.innerHTML = m.data.toFixed(1) + '°C ' + (m.data > 60
-    ? '<span class="badge b-bad">과열</span>'
-    : '<span class="badge b-ok">정상</span>'); }, 500);
-sub('/gas/concentration', 'std_msgs/msg/Float32', m => {
-  document.getElementById('gasc').innerHTML =
-    m.data.toFixed(1) + ' <small>ppm</small>'; }, 300);
+sub('/mission/state','std_msgs/msg/String', m => setMission(m.data), 500);
+sub('/inspection/gauge_value','std_msgs/msg/Float32', m => {
+  gaugeV = m.data;
+  document.getElementById('vP').textContent = m.data.toFixed(2); }, 300);
+sub('/inspection/max_temp','std_msgs/msg/Float32', m => {
+  tempV = m.data;
+  document.getElementById('vT').textContent = m.data.toFixed(1);
+  document.getElementById('alHeat').className =
+    'achip' + (m.data > 60 ? ' active' : ''); }, 500);
+sub('/robot/battery','std_msgs/msg/Float32', m => {
+  batV = m.data;
+  document.getElementById('vB').textContent = m.data.toFixed(0);
+  document.getElementById('alBat').className =
+    'achip' + (m.data < 20 ? ' active' : ''); }, 500);
+sub('/gas/concentration','std_msgs/msg/Float32', m => {
+  document.getElementById('vGas').textContent = m.data.toFixed(1) + ' ppm';
+  gasHist.push(m.data); if (gasHist.length > 140) gasHist.shift();
+  drawSpark();
+  document.getElementById('alGas').className =
+    'achip' + (m.data > 30 ? ' active' : ''); }, 400);
 
 const ev = document.getElementById('events');
 const addEvent = t => {
   const li = document.createElement('li');
-  li.textContent = new Date().toLocaleTimeString('ko-KR') + '  ' + t;
+  li.textContent = new Date().toLocaleTimeString('ko-KR',{hour12:false})
+    + '  ' + t;
   ev.prepend(li);
-  while (ev.children.length > 30) ev.lastChild.remove();
+  while (ev.children.length > 40) ev.lastChild.remove();
 };
-sub('/mission/event', 'std_msgs/msg/String', m => addEvent(m.data));
-sub('/gas/found', 'std_msgs/msg/Bool', m => m.data && addEvent('🚨 가스 누출원 발견'));
-sub('/robot/docked', 'std_msgs/msg/Bool', m => m.data && addEvent('🔌 충전 스테이션 도킹'));
+sub('/mission/event','std_msgs/msg/String', m => addEvent(m.data));
+sub('/gas/found','std_msgs/msg/Bool', m => m.data && addEvent('🚨 가스 누출원 발견 보고'));
+sub('/robot/docked','std_msgs/msg/Bool', m => m.data && addEvent('🔌 충전 스테이션 도킹 완료'));
+addEvent('관제센터 콘솔 기동');
 </script>
 </body>
 </html>
