@@ -1,8 +1,8 @@
 # https://github.com/mikedh/trimesh
 
 newmtl Main_Machine_01
-Ka 1.000 1.000 1.000
-Kd 1.000 1.000 1.000
+Ka 0.55 0.55 0.55
+Kd 0.75 0.75 0.75
 Ks 0.050 0.050 0.050
 Ns 1.00000000
 map_Kd Main_Machine_01_AlbedoTransparency.png

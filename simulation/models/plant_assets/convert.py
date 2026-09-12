@@ -56,6 +56,23 @@ def unity_base_texture(mat_name):
             return by_guid[m.group(1)]["asset"], pathlib.Path(by_guid[m.group(1)]["path"]).name
     return None
 
+MAX_TEX = 1024   # ogre2(센서 카메라) 소프트웨어 렌더링 텍스처 예산 초과 방지
+def _downscale(img_path):
+    from PIL import Image
+    im = Image.open(img_path)
+    if max(im.size) <= MAX_TEX: return
+    im.thumbnail((MAX_TEX, MAX_TEX), Image.LANCZOS)
+    im.convert("RGB").save(img_path, optimize=True)
+
+# 벽·지붕처럼 한 면만 있는 건물 메시는 양면으로 만든다 (면을 뒤집어 복제).
+# ogre2(센서 렌더러) 는 뒷면을 컬링해 카메라·라이다에서 벽이 사라지므로 필수.
+DOUBLE_SIDED = {"Factory_03", "Corridor_Wall_02"}
+def _double_side(scene):
+    for gname in list(scene.geometry):
+        g = scene.geometry[gname]
+        inv = g.copy(); inv.invert()
+        scene.geometry[gname] = trimesh.util.concatenate([g, inv])
+
 # ---- 2. FBX 변환 ----
 R = np.array([[1,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]], dtype=float)  # Y-up → Z-up
 S = np.diag([0.01,0.01,0.01,1.0])                                        # cm → m
@@ -83,8 +100,10 @@ for rec in sorted(fbx_list, key=lambda r: r["path"]):
             if "normal_axis" in cut: kill &= np.abs(nrm[:, cut["normal_axis"]]) > 0.9
             g.update_faces(~kill); g.remove_unreferenced_vertices()
             print(f"  [{name}/{gname}] 면 {int(kill.sum())}개 절단 {cut}")
+    if name in DOUBLE_SIDED: _double_side(scene)
     b = scene.bounds
-    scene.export(str(sub / f"{name}.obj"), include_texture=True)
+    scene.export(str(sub / f"{name}.obj"), include_texture=True, include_normals=True)  # vn 필수: 없으면 ogre2(센서)가 흰색으로 렌더
+    for img in sub.glob("*.png"): _downscale(img)
     fbx.unlink(); glb.unlink()
 
     # ---- 3. MTL 보정 ----
@@ -100,13 +119,15 @@ for rec in sorted(fbx_list, key=lambda r: r["path"]):
             if tex:
                 src, fname = tex
                 shutil.copy(src, sub / fname); has_map = True
+                _downscale(sub / fname)
                 blk = blk.rstrip("\n") + f"\nmap_Kd {fname}\n"; mapped.append(f"{mname}->{fname}")
         # 텍스처가 있으면 원색(1.0), 없으면 밝은 회색 — Ka 를 Kd 와 같게 두어 그늘면도 보이게
-        kd = "1.000 1.000 1.000" if has_map else "0.700 0.700 0.700"
-        blk = re.sub(r"(?m)^Ka .*$", f"Ka {kd}", blk)
+        # ogre2(센서 카메라, PBR) 는 ogre1(GUI) 보다 밝게 나와 1.0 이면 벽이 순백으로 포화된다
+        ka, kd = ("0.55 0.55 0.55", "0.75 0.75 0.75") if has_map else ("0.45 0.45 0.45", "0.65 0.65 0.65")
+        blk = re.sub(r"(?m)^Ka .*$", f"Ka {ka}", blk)
         blk = re.sub(r"(?m)^Kd .*$", f"Kd {kd}", blk)
         blk = re.sub(r"(?m)^Ks .*$", "Ks 0.050 0.050 0.050", blk)
-        if "\nKa " not in blk: blk = blk.rstrip("\n") + f"\nKa {kd}\n"
+        if "\nKa " not in blk: blk = blk.rstrip("\n") + f"\nKa {ka}\n"
         fixed.append(blk)
     mtl.write_text("".join(fixed))
     print(f"{name:20s} meshes={len(scene.geometry):2d} faces={sum(len(g.faces) for g in scene.geometry.values()):7d} "
