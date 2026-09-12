@@ -50,7 +50,7 @@ docker compose exec sim bash -c "pip install --break-system-packages trimesh pyg
 검증: 메시 배치 후 로봇 높이(0.4m)에서 미션 경유점 12곳에 레이캐스트 → 복도 벽 ±1.64m(충돌면과 일치),
 공장 통로·기계·가스탱크 앞 장애물 없음. RTF 는 박스 월드와 동일 패턴(평균 ≈0.8). 
 로봇 카메라(ogre2) 검증 캡처: `docs/images/verify_robot_camera.png` (OBJ 에 정점 법선이 없으면 ogre2 에서
-흰색으로 렌더되므로 변환기가 법선·양면·1024² 텍스처를 강제한다).
+흰색으로 렌더되므로 변환기가 정점 법선과 1024² 텍스처를 강제한다).
 Spot 로봇 모델(삼각형 97만 개)과 Unity 전용 애니메이션·이펙트는 사용하지 않는다 (로봇은 Go2 URDF).
 
 ![factory](docs/images/gazebo_assets_factory.png)

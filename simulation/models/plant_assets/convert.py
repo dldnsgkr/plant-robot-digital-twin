@@ -64,9 +64,9 @@ def _downscale(img_path):
     im.thumbnail((MAX_TEX, MAX_TEX), Image.LANCZOS)
     im.convert("RGB").save(img_path, optimize=True)
 
-# 벽·지붕처럼 한 면만 있는 건물 메시는 양면으로 만든다 (면을 뒤집어 복제).
-# ogre2(센서 렌더러) 는 뒷면을 컬링해 카메라·라이다에서 벽이 사라지므로 필수.
-DOUBLE_SIDED = {"Factory_03", "Corridor_Wall_02"}
+# 양면화(면을 뒤집어 복제) 옵션. 실내 에셋은 면이 안쪽을 향해 있어 안에서는 단면으로 충분하고,
+# 양면화하면 면 수가 2배가 되어 센서 렌더링 RTF 가 떨어지므로 기본은 비활성.
+DOUBLE_SIDED = set()
 def _double_side(scene):
     for gname in list(scene.geometry):
         g = scene.geometry[gname]
