@@ -55,6 +55,35 @@ Spot 로봇 모델(삼각형 97만 개)과 Unity 전용 애니메이션·이펙�
 
 ![factory](docs/images/gazebo_assets_factory.png)
 
+## Unity 디지털 트윈 뷰어 (`unity/PlantDigitalTwin`)
+
+제공 에셋을 원본 그대로 쓰는 고품질 시각화 창구. Gazebo 가 물리·센서·자율주행을 담당하고,
+Unity 는 ROS-TCP-Connector 로 로봇 포즈(`/model/go2/odometry`)를 받아 Spot 모델을 같은 위치에 그린다.
+씬 배치는 Gazebo 월드와 동일 좌표(공장 중심 0,0 / 복도 x 12.5~57.5 / 가스탱크 -9,6 / 팔레트 -6,4·3,-5 / 스폰 55,0).
+
+| 구성 | 내용 |
+|---|---|
+| Unity | 6000.0.68f1, High Definition 3D 템플릿 (에셋 가이드 지정 버전) |
+| 씬 | `Assets/PlantDT/Scenes/PlantDigitalTwin.unity` — `PlantDT > Build Plant Scene` 메뉴로 재생성 |
+| 스크립트 | `PlantSceneBuilder.cs`(배치·정렬), `PlantRosBridge.cs`(odometry 구독), `RobotPoseFollower.cs`(좌표 변환·보간) |
+| ROS 측 | 컨테이너의 `ros_tcp_endpoint`(포트 10000, Dockerfile 에 빌드 포함) |
+
+좌표 규약: Unity(x,y,z) = (−Gazebo.y, Gazebo.z, Gazebo.x), yaw 부호 반전 (ROS-TCP-Connector FLU→RUF 와 동일).
+
+실행 순서:
+
+```bash
+# 1) 컨테이너: 시뮬레이션 + Unity 엔드포인트
+cd docker && docker compose up -d
+docker compose exec -d sim bash -c "source /opt/ros/jazzy/setup.bash && ros2 launch /ws/src/plant_dt/simulation/launch/plant_dt.launch.py mission:=true rth_start_pct:=50.0"
+docker compose exec -d sim bash -c "source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash && ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000"
+# 2) Unity Hub 에서 unity/PlantDigitalTwin 열기 → PlantDigitalTwin 씬 → Play
+#    (ROSConnection 오브젝트: 127.0.0.1:10000, 상단 HUD 가 초록이면 연결됨)
+```
+
+원본 모델 폴더 `Assets/00_Model`(262MB)은 git 에서 제외했다. 클론 후 `Doosanenerbility/Modeling` 의
+unitypackage 9개를 임포트하면 프리팹 참조(GUID)가 그대로 복원된다.
+
 ## 기술 스택
 
 | 영역 | 스택 |

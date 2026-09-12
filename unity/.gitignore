@@ -1,0 +1,26 @@
+# Unity 프로젝트 — 생성물 제외 (Assets/Packages/ProjectSettings 만 추적)
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+**/*.csproj
+**/*.sln
+**/*.pidb
+**/*.booproj
+**/*.svd
+**/*.pdb
+**/*.mdb
+**/*.opendb
+**/*.VC.db
+**/.vs/
+**/.idea/
+**/*.DS_Store
+
+# 과제 제공 에셋 원본(262MB) — unitypackage 임포트로 복원 (README 참조). 프리팹·씬은 추적
+PlantDigitalTwin/Assets/00_Model/
+PlantDigitalTwin/Assets/TutorialInfo/
+**/.vscode/
+**/*.slnx

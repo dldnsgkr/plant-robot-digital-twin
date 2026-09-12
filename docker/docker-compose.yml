@@ -25,4 +25,5 @@ services:
       - "8765:8765"                  # foxglove_bridge WebSocket
       - "9090:9090"                  # rosbridge (Phase 5 대시보드용)
       - "8080:8080"                  # noVNC (Gazebo GUI 브라우저 확인용)
+      - "10000:10000"                # ROS-TCP-Endpoint (Unity 뷰어 연결)
     command: bash

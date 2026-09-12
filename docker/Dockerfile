@@ -56,6 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mesa-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Unity 디지털 트윈 뷰어 연결용 ROS-TCP-Endpoint (Unity Robotics Hub, ROS 2 브랜치) — 포트 10000
+RUN mkdir -p /ws/src && cd /ws/src && \
+    git clone --depth 1 -b main-ros2 https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git && \
+    cd /ws && . /opt/ros/jazzy/setup.sh && colcon build --packages-select ros_tcp_endpoint
+
 # PyTorch는 이미지가 800MB+ 커지므로 Module 2 착수 시점(Phase 3)에 추가한다
 # (Ubuntu 24.04는 PEP668 적용 — pip 설치 시 --break-system-packages 필요)
 
