@@ -1,0 +1,8 @@
+# https://github.com/mikedh/trimesh
+
+newmtl Plastic_Pallet_01
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Plastic_Pallet_01_BaseMap.png

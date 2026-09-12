@@ -22,6 +22,37 @@ docker compose run --rm --no-deps --service-ports sim bash -c \
 # → 복도 순찰 → 게이지 판독 → 공장 이동 → 배터리 20% → 자율 복귀 도킹
 ```
 
+## 제공 3D 에셋 적용 (Gazebo)
+
+과제 제공 에셋(`Doosanenerbility.zip`, Unity `.unitypackage`)의 FBX를 Gazebo용 OBJ로 변환해
+월드의 **visual** 로 사용한다. 충돌 형상은 검증된 박스 그대로 유지하므로 물리·Nav2 동작은 바뀌지 않는다.
+
+| 에셋 | 용도 | 배치 |
+|---|---|---|
+| `factory_inner_1` (Factory_03) | 공장 벽·지붕·트러스·창·바닥 | 박스 공장 25×18 에 중심 정렬 |
+| `factory_hall` (Corridor_Wall_02) | 복도 벽·천장 조명·배관·문 | x 0.926 / y 0.92 스케일로 45×3.5 에 정렬 (벽 안쪽면 = 충돌면) |
+| `fac_gastank` (Main_Machine_01) | 가스 탱크 | 0.45 배, 기존 실린더 위치 |
+| `obs_palette` (Plastic_Pallet_01) | 공장 팔레트 장애물 2개 | 기존 박스 위치 |
+
+변환 스크립트 `simulation/models/plant_assets/convert.py` (컨테이너 안에서 실행):
+
+```bash
+# 1) unitypackage 를 각각 tar 로 풀어 한 디렉토리에 모은다 (Mac)
+for p in map/factory_hall map/factory_inner_1 object/fac_gastank object/obs_palette; do
+  mkdir -p /tmp/pkg/$(basename $p) && tar -xzf $p.unitypackage -C /tmp/pkg/$(basename $p); done
+docker cp /tmp/pkg plant-dt-sim:/tmp/pkg
+# 2) 컨테이너 안: FBX → glb(assimp) → OBJ Z-up·m(trimesh) + Unity .mat 텍스처 매핑 + 경로 간섭 구간 절단
+docker compose exec sim bash -c "pip install --break-system-packages trimesh pygltflib rtree && \
+  apt-get install -y assimp-utils && cd /ws/src/plant_dt/simulation/models/plant_assets && \
+  python3 convert.py /tmp/pkg meshes"
+```
+
+검증: 메시 배치 후 로봇 높이(0.4m)에서 미션 경유점 12곳에 레이캐스트 → 복도 벽 ±1.64m(충돌면과 일치),
+공장 통로·기계·가스탱크 앞 장애물 없음. RTF 는 박스 월드와 동일 패턴(평균 ≈0.8). 
+Spot 로봇 모델(삼각형 97만 개)과 Unity 전용 애니메이션·이펙트는 사용하지 않는다 (로봇은 Go2 URDF).
+
+![factory](docs/images/gazebo_assets_factory.png)
+
 ## 기술 스택
 
 | 영역 | 스택 |

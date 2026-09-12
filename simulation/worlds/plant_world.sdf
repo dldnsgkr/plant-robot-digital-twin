@@ -82,39 +82,29 @@
       <link name="walls">
         <!-- 공장 북벽 y=+9 -->
         <collision name="f_north_c"><pose>0 9 3.5 0 0 0</pose><geometry><box><size>25 0.2 7</size></box></geometry></collision>
-        <visual name="f_north_v"><pose>0 9 3.5 0 0 0</pose><geometry><box><size>25 0.2 7</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <!-- 공장 남벽 y=-9 -->
         <collision name="f_south_c"><pose>0 -9 3.5 0 0 0</pose><geometry><box><size>25 0.2 7</size></box></geometry></collision>
-        <visual name="f_south_v"><pose>0 -9 3.5 0 0 0</pose><geometry><box><size>25 0.2 7</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <!-- 공장 서벽 x=-12.5 -->
         <collision name="f_west_c"><pose>-12.5 0 3.5 0 0 0</pose><geometry><box><size>0.2 18.2 7</size></box></geometry></collision>
-        <visual name="f_west_v"><pose>-12.5 0 3.5 0 0 0</pose><geometry><box><size>0.2 18.2 7</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <!-- 공장 동벽 x=12.5 (복도 개구부 y[-1.75,1.75] 제외한 두 구간) -->
         <collision name="f_east_n_c"><pose>12.5 5.375 3.5 0 0 0</pose><geometry><box><size>0.2 7.25 7</size></box></geometry></collision>
-        <visual name="f_east_n_v"><pose>12.5 5.375 3.5 0 0 0</pose><geometry><box><size>0.2 7.25 7</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <collision name="f_east_s_c"><pose>12.5 -5.375 3.5 0 0 0</pose><geometry><box><size>0.2 7.25 7</size></box></geometry></collision>
-        <visual name="f_east_s_v"><pose>12.5 -5.375 3.5 0 0 0</pose><geometry><box><size>0.2 7.25 7</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <!-- 개구부 상단 인방 (복도 높이 4 위쪽, z 4~7) -->
         <collision name="f_east_lintel_c"><pose>12.5 0 5.5 0 0 0</pose><geometry><box><size>0.2 3.5 3</size></box></geometry></collision>
-        <visual name="f_east_lintel_v"><pose>12.5 0 5.5 0 0 0</pose><geometry><box><size>0.2 3.5 3</size></box></geometry>
-          <material><ambient>0.6 0.6 0.62 1</ambient><diffuse>0.6 0.6 0.62 1</diffuse></material></visual>
         <!-- 복도 북벽 y=+1.75, x[12.5,57.5] -->
         <collision name="c_north_c"><pose>35 1.75 2 0 0 0</pose><geometry><box><size>45 0.2 4</size></box></geometry></collision>
-        <visual name="c_north_v"><pose>35 1.75 2 0 0 0</pose><geometry><box><size>45 0.2 4</size></box></geometry>
-          <material><ambient>0.65 0.63 0.58 1</ambient><diffuse>0.65 0.63 0.58 1</diffuse></material></visual>
         <!-- 복도 남벽 y=-1.75 -->
         <collision name="c_south_c"><pose>35 -1.75 2 0 0 0</pose><geometry><box><size>45 0.2 4</size></box></geometry></collision>
-        <visual name="c_south_v"><pose>35 -1.75 2 0 0 0</pose><geometry><box><size>45 0.2 4</size></box></geometry>
-          <material><ambient>0.65 0.63 0.58 1</ambient><diffuse>0.65 0.63 0.58 1</diffuse></material></visual>
         <!-- 복도 끝벽 x=57.5 -->
         <collision name="c_end_c"><pose>57.5 0 2 0 0 0</pose><geometry><box><size>0.2 3.7 4</size></box></geometry></collision>
-        <visual name="c_end_v"><pose>57.5 0 2 0 0 0</pose><geometry><box><size>0.2 3.7 4</size></box></geometry>
-          <material><ambient>0.65 0.63 0.58 1</ambient><diffuse>0.65 0.63 0.58 1</diffuse></material></visual>
+        <!-- ===== 제공 3D 에셋 (Doosanenerbility unitypackage → OBJ, models/plant_assets/convert.py) =====
+             visual 만 메시로 교체하고 충돌 박스는 그대로 둔다 (검증된 물리·Nav2 동작 유지).
+             배치 근거: 메시 바운딩박스를 박스 월드 치수에 정렬 (공장 25.2×18.7 → 중심 맞춤,
+             복도 48.6×3.8 → x 0.926 / y 0.92 스케일로 45×3.5 에 맞춤, 벽 안쪽면 = 충돌면 ±1.65) -->
+        <visual name="factory_mesh_v"><pose>-2.475 0.205 0.005 0 0 0</pose>
+          <geometry><mesh><uri>model://plant_assets/meshes/Factory_03/Factory_03.obj</uri></mesh></geometry></visual>
+        <visual name="corridor_mesh_v"><pose>3.45 0.015 -0.035 0 0 0</pose>
+          <geometry><mesh><uri>model://plant_assets/meshes/Corridor_Wall_02/Corridor_Wall_02.obj</uri><scale>0.926 0.92 1.0</scale></mesh></geometry></visual>
       </link>
     </model>
 
@@ -155,8 +145,8 @@
       <pose>-6 4 0.075 0 0 0.3</pose>
       <link name="link">
         <collision name="c"><geometry><box><size>1.2 0.8 0.15</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>1.2 0.8 0.15</size></box></geometry>
-          <material><ambient>0.55 0.42 0.25 1</ambient><diffuse>0.55 0.42 0.25 1</diffuse></material></visual>
+        <visual name="v"><pose>0.05 -0.17 -0.075 0 0 0</pose>
+          <geometry><mesh><uri>model://plant_assets/meshes/Plastic_Pallet_01/Plastic_Pallet_01.obj</uri></mesh></geometry></visual>
       </link>
     </model>
     <model name="factory_pallet_2">
@@ -164,8 +154,8 @@
       <pose>3 -5 0.075 0 0 -0.6</pose>
       <link name="link">
         <collision name="c"><geometry><box><size>1.2 0.8 0.15</size></box></geometry></collision>
-        <visual name="v"><geometry><box><size>1.2 0.8 0.15</size></box></geometry>
-          <material><ambient>0.55 0.42 0.25 1</ambient><diffuse>0.55 0.42 0.25 1</diffuse></material></visual>
+        <visual name="v"><pose>0.05 -0.17 -0.075 0 0 0</pose>
+          <geometry><mesh><uri>model://plant_assets/meshes/Plastic_Pallet_01/Plastic_Pallet_01.obj</uri></mesh></geometry></visual>
       </link>
     </model>
     <model name="factory_crate">
@@ -220,8 +210,8 @@
       <pose>-9 6 2 0 0 0</pose>
       <link name="link">
         <collision name="c"><geometry><cylinder><radius>1.2</radius><length>4</length></cylinder></geometry></collision>
-        <visual name="v"><geometry><cylinder><radius>1.2</radius><length>4</length></cylinder></geometry>
-          <material><ambient>0.75 0.72 0.65 1</ambient><diffuse>0.75 0.72 0.65 1</diffuse></material></visual>
+        <visual name="v"><pose>0.853 -0.80 -2.0 0 0 0</pose>
+          <geometry><mesh><uri>model://plant_assets/meshes/Main_Machine_01/Main_Machine_01.obj</uri><scale>0.45 0.45 0.45</scale></mesh></geometry></visual>
       </link>
     </model>
 

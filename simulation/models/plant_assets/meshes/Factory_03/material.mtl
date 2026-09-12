@@ -1,0 +1,41 @@
+# https://github.com/mikedh/trimesh
+
+newmtl Wall_01
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Wall_01.png
+
+newmtl Floor_01
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Floor_01_BaseMap.png
+newmtl Light_01
+Ka 0.700 0.700 0.700
+Kd 0.700 0.700 0.700
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+
+newmtl Material.001
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Material.001.png
+
+newmtl Material.006
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Material.006.png
+
+newmtl Material.004
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.050 0.050 0.050
+Ns 1.00000000
+map_Kd Material.004.png
