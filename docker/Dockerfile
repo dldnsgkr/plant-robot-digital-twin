@@ -44,6 +44,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
+# Gazebo GUI 확인용 — 브라우저(noVNC)로 컨테이너 안 X 화면을 본다 (arm64 네이티브)
+# Xvfb(가상 X 서버) + x11vnc(VNC 서버) + noVNC/websockify(브라우저 클라이언트)
+# libgl1-mesa-dri: GPU 없는 컨테이너에서 llvmpipe 소프트웨어 OpenGL 렌더링
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    libgl1-mesa-dri \
+    mesa-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # PyTorch는 이미지가 800MB+ 커지므로 Module 2 착수 시점(Phase 3)에 추가한다
 # (Ubuntu 24.04는 PEP668 적용 — pip 설치 시 --break-system-packages 필요)
 

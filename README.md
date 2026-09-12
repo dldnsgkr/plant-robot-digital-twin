@@ -62,8 +62,9 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 # → Mac의 Foxglove Studio에서 ws://localhost:8765 접속
 ```
 
-Gazebo GUI가 필요하면 브라우저에서 http://localhost:8080/vnc.html 접속 후
-컨테이너 셸에서 `gz sim -g` 실행.
+Gazebo GUI가 필요하면 컨테이너 셸에서 `bash /ws/src/plant_dt/docker/gui.sh --gz` 실행 후
+브라우저에서 http://localhost:8080/vnc.html 접속 (sim 컨테이너 내장 noVNC, arm64 네이티브,
+소프트웨어 렌더링). 검증 화면: [docs/images/gazebo_gui_novnc.png](docs/images/gazebo_gui_novnc.png)
 
 ## 레포지토리 구조
 
