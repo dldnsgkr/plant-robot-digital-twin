@@ -10,8 +10,11 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
 
 namespace PlantDT
 {
@@ -24,14 +27,27 @@ namespace PlantDT
         [MenuItem("PlantDT/Build Plant Scene")]
         public static void Build()
         {
+            // ROS-TCP-Connector 를 ROS2 프로토콜로 (Robotics > ROS Settings 와 동일한 효과)
+            var target = UnityEditor.Build.NamedBuildTarget.Standalone;
+            var defines = PlayerSettings.GetScriptingDefineSymbols(target);
+            if (!defines.Split(';').Contains("ROS2")) PlayerSettings.SetScriptingDefineSymbols(target, string.IsNullOrEmpty(defines) ? "ROS2" : defines + ";ROS2");
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             Directory.CreateDirectory("Assets/PlantDT/Scenes");
 
             // ---- 건물 ----
+            // 두 건물 프리팹은 FBX 로컬 +x 가 긴 변이고 그쪽(공장 동벽·복도 근단)에 문이 있다.
+            // Gazebo x(동) = Unity +z 이므로 로컬 +x → 월드 +z 가 되도록 Y축 -90° 회전 후 정렬한다.
             var factory = Place("Map/factory_inner_1", "Factory");
+            OrientLongAxisToZ(factory);
             AlignBounds(factory, centerGz: new Vector3(0, 0, 0), sizeGz: new Vector3(25f, 18f, 0), scaleToFit: false);
             var corridor = Place("Map/factory_hall_1", "Corridor");
+            OrientLongAxisToZ(corridor);
             AlignBounds(corridor, centerGz: new Vector3(35f, 0, 0), sizeGz: new Vector3(45f, 3.5f, 0), scaleToFit: true);
+            // 바닥면 보정: AlignBounds 는 바운드 최하단을 0 에 두는데, 메시에 바닥 두께가 있어 바닥 윗면이 떠오른다
+            //   복도: 바닥 슬래브 -0.90~0.04 → 윗면이 0.94 에 놓이므로 0.935 내림 / 공장: -0.07 → 0.07 내림
+            if (corridor != null) corridor.transform.position += Vector3.down * 0.935f;
+            if (factory != null) factory.transform.position += Vector3.down * 0.07f;
 
             // ---- 설비·장애물 ----
             var tank = Place("object/fac_gastank_1", "GasTank");
@@ -46,8 +62,11 @@ namespace PlantDT
             if (robot != null)
             {
                 AlignBounds(robot, centerGz: new Vector3(55f, 0, 0), sizeGz: Vector3.zero, scaleToFit: false);
-                robot.transform.rotation = Quaternion.LookRotation(Gz(-1, 0, 0) - Vector3.zero, Vector3.up);
-                if (robot.GetComponent<RobotPoseFollower>() == null) robot.AddComponent<RobotPoseFollower>();
+                var follower = robot.GetComponent<RobotPoseFollower>() ?? robot.AddComponent<RobotPoseFollower>();
+                follower.baseRotation = robot.transform.rotation;                       // 프리팹 루트 회전 보존
+                follower.SetPoseGz(55f, 0f, 0f, Mathf.PI);                                 // Gazebo 스폰: 공장(-x) 방향
+                robot.transform.rotation = follower.TargetRotation; robot.transform.position = follower.TargetPosition;
+                follower.animator = SetupSpotAnimator(robot);
             }
 
             // ---- 조명·환경 세팅 (에셋 제공 프리팹) + 가스 분출 이펙트 (가스탱크 옆, 초기 비활성) ----
@@ -62,15 +81,48 @@ namespace PlantDT
             var bridge = new GameObject("PlantRosBridge").AddComponent<PlantRosBridge>();
             if (robot != null) bridge.robot = robot.GetComponent<RobotPoseFollower>();
 
-            // ---- 카메라: 복도 입구 위에서 공장 쪽 조망 ----
+            // ---- 야간 실내 씬: 기본 태양광 제거, 노출 범위 제한 볼륨 추가 ----
+            // MapSetting 의 HDRI 는 야간 배경이지만 하늘 조명이 20,000 lux 라 건물 밖에서 보면 지붕이 과다노출된다.
+            // 실내(로봇 시점)에서 보는 것이 기준이므로 자동 노출의 상한을 제한해 날림을 막는다.
+            var sun = GameObject.Find("Directional Light");
+            if (sun != null) Object.DestroyImmediate(sun);
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, "Assets/PlantDT/PlantDTVolume.asset");
+            var exposure = profile.Add<Exposure>(true);
+            exposure.mode.Override(ExposureMode.Automatic);
+            exposure.limitMin.Override(3f); exposure.limitMax.Override(11f);
+            exposure.adaptationSpeedDarkToLight.Override(4f); exposure.adaptationSpeedLightToDark.Override(4f);
+            var volGo = new GameObject("PlantDT Volume");
+            var vol = volGo.AddComponent<Volume>(); vol.isGlobal = true; vol.priority = 10; vol.sharedProfile = profile;
+
+            // ---- 실내 조명: Gazebo 월드와 같은 위치의 포인트 라이트 (공장 2, 복도 2) ----
+            AddPointLight("FactoryLight_1", Gz(-5f, 0f, 6f), 20000f, 25f);
+            AddPointLight("FactoryLight_2", Gz(5f, 0f, 6f), 20000f, 25f);
+            AddPointLight("CorridorLight_1", Gz(25f, 0f, 3.6f), 6000f, 18f);
+            AddPointLight("CorridorLight_2", Gz(45f, 0f, 3.6f), 6000f, 18f);
+
+            // ---- 카메라: 로봇 3인칭 추적 (Play 시) / 초기 위치는 복도 스폰 뒤 ----
             var cam = Camera.main;
-            if (cam != null) { cam.transform.position = Gz(20f, -6f, 6f); cam.transform.LookAt(Gz(0f, 0f, 1f)); cam.farClipPlane = 300f; }
+            if (cam != null)
+            {
+                cam.farClipPlane = 300f;
+                var fc = cam.gameObject.AddComponent<FollowCamera>();
+                if (robot != null) { fc.target = robot.transform; cam.transform.position = robot.transform.TransformPoint(fc.offset); cam.transform.LookAt(robot.transform.position + Vector3.up * 0.4f); }
+            }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             var scenes = EditorBuildSettings.scenes.Where(s => s.path != ScenePath).ToList();
             scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             Debug.Log($"[PlantDT] scene built: {ScenePath}");
+        }
+
+        static void AddPointLight(string name, Vector3 pos, float lumen, float range)
+        {
+            var go = new GameObject(name); go.transform.position = pos;
+            var l = go.AddComponent<Light>(); l.type = LightType.Point; l.range = range; l.color = new Color(1f, 0.95f, 0.85f);
+            var hd = go.AddComponent<HDAdditionalLightData>();
+            hd.SetIntensity(lumen, LightUnit.Lumen);
         }
 
         static GameObject Place(string prefabRelPath, string name)
@@ -85,22 +137,108 @@ namespace PlantDT
             return go;
         }
 
+        // 제공 애니메이션(spot_move 걷기, spot_fall 넘어짐)으로 Animator Controller 생성·연결
+        //   파라미터: moving(bool) → Idle↔Move,  fall(trigger) → Fall → Idle
+        //   루트 모션은 끈다: 위치·방향은 ROS 포즈가 결정한다
+        static Animator SetupSpotAnimator(GameObject robot)
+        {
+            var move = LoadClip("spot_move"); var fall = LoadClip("spot_fall_1");
+            if (move != null) { var st = AnimationUtility.GetAnimationClipSettings(move); st.loopTime = true; AnimationUtility.SetAnimationClipSettings(move, st); }
+            const string path = "Assets/PlantDT/SpotAnimator.controller";
+            var ctrl = AnimatorController.CreateAnimatorControllerAtPath(path);
+            ctrl.AddParameter("moving", AnimatorControllerParameterType.Bool);
+            ctrl.AddParameter("fall", AnimatorControllerParameterType.Trigger);
+            var sm = ctrl.layers[0].stateMachine;
+            var idle = sm.AddState("Idle"); idle.motion = move; idle.speed = 0f;      // 걷기 첫 프레임에서 정지
+            var walk = sm.AddState("Move"); walk.motion = move;
+            var fallSt = sm.AddState("Fall"); fallSt.motion = fall;
+            sm.defaultState = idle;
+            var t1 = idle.AddTransition(walk); t1.AddCondition(AnimatorConditionMode.If, 0, "moving"); t1.hasExitTime = false; t1.duration = 0.15f;
+            var t2 = walk.AddTransition(idle); t2.AddCondition(AnimatorConditionMode.IfNot, 0, "moving"); t2.hasExitTime = false; t2.duration = 0.15f;
+            var t3 = sm.AddAnyStateTransition(fallSt); t3.AddCondition(AnimatorConditionMode.If, 0, "fall"); t3.hasExitTime = false; t3.duration = 0.1f;
+            var t4 = fallSt.AddTransition(idle); t4.hasExitTime = true; t4.exitTime = 1f; t4.duration = 0.2f;
+            var anim = robot.GetComponent<Animator>() ?? robot.AddComponent<Animator>();
+            anim.runtimeAnimatorController = ctrl; anim.applyRootMotion = false;
+            // 제자리 걷기 클립의 자연 전진 속도 = 발의 한 사이클 수평 왕복 거리(보폭) / 주기 → 발 미끄러짐 방지 기준값
+            var follower = robot.GetComponent<RobotPoseFollower>();
+            if (move != null && follower != null) follower.animNominalSpeed = EstimateWalkSpeed(robot, move);
+            Debug.Log($"[PlantDT] Spot animator: move={(move != null)} fall={(fall != null)} avatar={(anim.avatar != null ? anim.avatar.name : "none")}");
+            return anim;
+        }
+
+        static float EstimateWalkSpeed(GameObject robot, AnimationClip clip)
+        {
+            var body = robot.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Spot_Body_Bone_01");
+            var feet = robot.GetComponentsInChildren<Transform>(true).Where(t => t.name.EndsWith("Hand_Bone_00")).ToList();
+            if (body == null || feet.Count == 0) { Debug.LogWarning("[PlantDT] walk speed: bones not found"); return 0.5f; }
+            const int N = 40; var minA = new float[feet.Count]; var maxA = new float[feet.Count];
+            for (int i = 0; i < feet.Count; i++) { minA[i] = float.MaxValue; maxA[i] = float.MinValue; }
+            var savedPos = robot.transform.position; var savedRot = robot.transform.rotation;
+            robot.transform.position = Vector3.zero; robot.transform.rotation = Quaternion.identity;
+            for (int k = 0; k < N; k++)
+            {
+                clip.SampleAnimation(robot, clip.length * k / N);
+                for (int i = 0; i < feet.Count; i++)
+                {
+                    var rel = body.InverseTransformPoint(feet[i].position);          // 몸체 기준 발 위치
+                    float along = new Vector2(rel.x, rel.z).magnitude * Mathf.Sign(rel.z == 0 ? rel.x : rel.z); // 수평 투영
+                    minA[i] = Mathf.Min(minA[i], along); maxA[i] = Mathf.Max(maxA[i], along);
+                }
+            }
+            clip.SampleAnimation(robot, 0f); robot.transform.position = savedPos; robot.transform.rotation = savedRot;
+            float stride = 0f; for (int i = 0; i < feet.Count; i++) stride += (maxA[i] - minA[i]); stride /= feet.Count;
+            float v = stride / clip.length;
+            Debug.Log($"[PlantDT] walk clip: feet={feet.Count} stride≈{stride:F3} m, period={clip.length:F3} s → nominal speed≈{v:F3} m/s");
+            return Mathf.Max(v, 0.05f);
+        }
+
+        static AnimationClip LoadClip(string name)
+        {
+            var g = AssetDatabase.FindAssets($"t:AnimationClip {name}").Select(AssetDatabase.GUIDToAssetPath).FirstOrDefault(p => p.EndsWith($"/{name}.anim"));
+            return g == null ? null : AssetDatabase.LoadAssetAtPath<AnimationClip>(g);
+        }
+
+        static int Dominant(Vector3 v) { var a = new[] { Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z) }; return a[0] >= a[1] && a[0] >= a[2] ? 0 : (a[1] >= a[2] ? 1 : 2); }
+
+        static Bounds WorldBounds(GameObject go)
+        {
+            var rs = go.GetComponentsInChildren<Renderer>(true);
+            var b = rs[0].bounds; foreach (var r in rs) b.Encapsulate(r.bounds); return b;
+        }
+
+        // 프리팹의 긴 수평축을 월드 +z(Gazebo +x) 로 돌리고, 바운드가 +z 쪽으로 치우치도록(문·근단 방향) 180° 보정
+        static void OrientLongAxisToZ(GameObject go)
+        {
+            if (go == null) return;
+            var baseRot = go.transform.rotation;                 // 프리팹 루트의 원래 회전(모델을 세우는 값) 보존
+            go.transform.position = Vector3.zero;
+            var raw = WorldBounds(go);
+            Debug.Log($"[PlantDT] {go.name}: raw bounds min={raw.min} max={raw.max} baseRot={baseRot.eulerAngles}");
+            if (raw.size.x > raw.size.z) go.transform.rotation = Quaternion.Euler(0, -90f, 0) * baseRot;   // 긴 변 → 월드 z
+            var b = WorldBounds(go);
+            if (b.max.z < -b.min.z) go.transform.rotation = Quaternion.Euler(0, 180f, 0) * go.transform.rotation;   // 치우침이 -z 면 뒤집기
+            b = WorldBounds(go);
+            Debug.Log($"[PlantDT] {go.name}: oriented rot={go.transform.eulerAngles} bounds z[{b.min.z:F2},{b.max.z:F2}] x[{b.min.x:F2},{b.max.x:F2}]");
+        }
+
         // 렌더 바운드의 바닥 중심을 Gazebo 좌표 centerGz(z=0 바닥) 에 맞추고, 필요시 xy 크기를 sizeGz 에 맞춰 스케일
         static void AlignBounds(GameObject go, Vector3 centerGz, Vector3 sizeGz, bool scaleToFit, float uniformScale = 1f)
         {
             if (go == null) return;
-            go.transform.position = Vector3.zero; go.transform.rotation = Quaternion.identity;
-            go.transform.localScale = Vector3.one * uniformScale;
+            go.transform.position = Vector3.zero;   // 회전은 프리팹/OrientLongAxisToZ 값을 유지
+            go.transform.localScale = go.transform.localScale * uniformScale;
             var rs = go.GetComponentsInChildren<Renderer>(true);
             if (rs.Length == 0) { go.transform.position = Gz(centerGz.x, centerGz.y, centerGz.z); return; }
-            var b = rs[0].bounds; foreach (var r in rs) b.Encapsulate(r.bounds);
+            var b = WorldBounds(go);
             if (scaleToFit && sizeGz.x > 0 && sizeGz.y > 0)
             {
-                // Gazebo x → Unity z, Gazebo y → Unity x
+                // 월드 z 크기 → sizeGz.x(Gazebo x), 월드 x 크기 → sizeGz.y(Gazebo y). 회전돼 있으므로 로컬축으로 환산
+                float fz = sizeGz.x / b.size.z, fx = sizeGz.y / b.size.x;
                 var s = go.transform.localScale;
-                s.z *= sizeGz.x / b.size.z; s.x *= sizeGz.y / b.size.x;
+                s[Dominant(go.transform.InverseTransformDirection(Vector3.forward))] *= fz;   // 월드 z ↔ 로컬축
+                s[Dominant(go.transform.InverseTransformDirection(Vector3.right))] *= fx;     // 월드 x ↔ 로컬축
                 go.transform.localScale = s;
-                b = rs[0].bounds; foreach (var r in rs) b.Encapsulate(r.bounds);
+                b = WorldBounds(go);
             }
             var bottomCenter = new Vector3(b.center.x, b.min.y, b.center.z);
             go.transform.position += Gz(centerGz.x, centerGz.y, centerGz.z) - bottomCenter;
