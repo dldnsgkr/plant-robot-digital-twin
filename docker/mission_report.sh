@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# 현재 미션 로그 타임라인·넘어짐 횟수 요약 (Mac 에서 실행)
+cd "$(dirname "$0")"
+docker compose exec -T sim bash -c 'T0=$(grep -aE "\[mission_controller\]: 미션 시작" /tmp/mission.log | grep -oE "\[1[0-9]{9}" | tr -d "[" | head -1); [ -z "$T0" ] && { echo "미션 시작 로그 없음"; exit 0; }; echo "경과 t=$(( $(date +%s) - T0 ))s"; grep -aE "\[(mission_controller|return_to_home|fall_recovery)\]" /tmp/mission.log | grep -aviE "dbg| 시작 \(|_recovery 시작" | grep -oE "\[1[0-9]{9}\.[0-9]+\] \[[a-z_]+\]: .*" | awk -v t0=$T0 "{ts=substr(\$1,2,10); printf \"t=%4ds %s\n\", ts-t0, substr(\$0, index(\$0,\"] [\")+2)}" | cut -c1-110; echo "넘어짐: $(grep -ac "넘어짐 감지" /tmp/mission.log)회 | 고아 브리지: $(pgrep -c -f "parameter_bridg[e]")개 | RTF: $(source /opt/ros/jazzy/setup.bash; timeout 6 gz topic -e -t /world/plant/stats 2>/dev/null | grep real_time_factor | awk "{s+=\$2;n++} END{if(n) printf \"%.2f\", s/n}")"'
