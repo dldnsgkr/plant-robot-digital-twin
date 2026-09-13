@@ -49,6 +49,23 @@ namespace PlantDT
             if (corridor != null) corridor.transform.position += Vector3.down * 0.935f;
             if (factory != null) factory.transform.position += Vector3.down * 0.07f;
 
+            // ---- 복도 평바닥: Gazebo 물리 세계와 일치 ----
+            // 복도 에셋 끝부분(x 42~54m)은 경사로로 0.8m 내려가는 저지대 + 계단이지만, Gazebo 는 z=0 평면 지면이
+            // 그 위를 덮고 있어 로봇이 평지를 걷는다. Unity 도 같은 높이의 바닥을 깔아 로봇이 허공을 걷지 않게 한다.
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane); floor.name = "CorridorFloor";
+            Object.DestroyImmediate(floor.GetComponent<Collider>());
+            floor.transform.position = Gz(35f, 0f, 0.005f);
+            floor.transform.localScale = new Vector3(3.5f / 10f, 1f, 45f / 10f);           // Plane 기본 10×10 m
+            var floorMat = AssetDatabase.FindAssets("Floor_01 t:Material").Select(AssetDatabase.GUIDToAssetPath)
+                                        .Select(AssetDatabase.LoadAssetAtPath<Material>).FirstOrDefault(m => m != null);
+            if (floorMat != null)
+            {
+                var inst = new Material(floorMat); inst.name = "CorridorFloor_Mat";
+                if (inst.HasProperty("_BaseColorMap")) inst.SetTextureScale("_BaseColorMap", new Vector2(3.5f / 2f, 45f / 2f));
+                AssetDatabase.CreateAsset(inst, "Assets/PlantDT/CorridorFloor_Mat.mat");
+                floor.GetComponent<Renderer>().sharedMaterial = inst;
+            }
+
             // ---- 설비·장애물 ----
             var tank = Place("object/fac_gastank_1", "GasTank");
             AlignBounds(tank, centerGz: new Vector3(-9f, 6f, 0), sizeGz: Vector3.zero, scaleToFit: false, uniformScale: 0.45f);

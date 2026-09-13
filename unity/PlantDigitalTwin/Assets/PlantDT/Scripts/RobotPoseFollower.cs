@@ -12,12 +12,17 @@ namespace PlantDT
         [Tooltip("이 속도(m/s) 이상이면 걷기 애니메이션")] public float movingThreshold = 0.04f;
         [Tooltip("애니메이션 재생 속도 = 실제속도 / 이 값")] public float animNominalSpeed = 0.5f;
         [Tooltip("높이(z) 흔들림 필터 시간(초)")] public float heightSmooth = 0.6f;
+        [Tooltip("이동 중 모델 방향을 몸체 yaw 대신 이동 방향(속도 벡터)으로 잡아 보행 헌팅을 숨김")] public bool headingFromVelocity = true;
+        [Tooltip("방향 필터 시간(초)")] public float headingSmooth = 1.0f;
+        Vector3 velFiltered; float headingYaw; bool headingInit;
         [Header("상태 (읽기 전용)")] public float speed;
         Vector3 lastTarget; float lastTargetTime; float speedFiltered;
         [Tooltip("프리팹 루트의 원래 회전 (모델을 세우는 값). yaw 는 여기에 합성된다")] public Quaternion baseRotation = Quaternion.identity;
         Vector3 targetPos; Quaternion targetRot; bool has;
         public Vector3 TargetPosition => targetPos;
         public Quaternion TargetRotation => targetRot;
+        /// 수평 진행 방향 (프리팹 루트 회전과 무관한 yaw 기준)
+        public Vector3 Forward { get; private set; } = Vector3.forward;
 
         static Vector3 Gz(float x, float y, float z) => new Vector3(-y, z, x);
 
@@ -29,12 +34,22 @@ namespace PlantDT
             if (has && now > lastTargetTime + 1e-3f)
             {
                 var d = p - lastTarget; d.y = 0f;
-                float v = d.magnitude / (now - lastTargetTime);
+                float dt = now - lastTargetTime;
+                float v = d.magnitude / dt;
                 speedFiltered = Mathf.Lerp(speedFiltered, v, 0.2f);
+                float kv = 1f - Mathf.Exp(-dt / Mathf.Max(headingSmooth, 1e-3f));
+                velFiltered = Vector3.Lerp(velFiltered, d / dt, kv);
             }
             lastTarget = p; lastTargetTime = now;
             targetPos = p;
-            targetRot = Quaternion.Euler(0, -yaw * Mathf.Rad2Deg, 0) * baseRotation;
+            // 모델 방향: 이동 중이면 필터된 속도 방향(직진 시 몸체 yaw 헌팅 ±10° 를 숨김), 정지 시 몸체 yaw
+            float yawDeg = -yaw * Mathf.Rad2Deg;
+            if (headingFromVelocity && speedFiltered > movingThreshold && velFiltered.sqrMagnitude > 1e-4f)
+                yawDeg = Mathf.Atan2(velFiltered.x, velFiltered.z) * Mathf.Rad2Deg;
+            if (!headingInit) { headingYaw = yawDeg; headingInit = true; }
+            headingYaw = Mathf.LerpAngle(headingYaw, yawDeg, 0.15f);
+            targetRot = Quaternion.Euler(0, headingYaw, 0) * baseRotation;
+            var f = Quaternion.Euler(0, headingYaw, 0) * Vector3.forward; Forward = f;
             if (!has) { transform.position = targetPos; transform.rotation = targetRot; has = true; }
         }
 

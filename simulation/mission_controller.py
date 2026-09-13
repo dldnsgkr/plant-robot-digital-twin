@@ -29,7 +29,7 @@ from rth import astar  # noqa: E402  (월드 기하·A* 공유)
 
 GAUGE_VP = (38.0, 0.22)     # patrol_planner가 산출한 게이지 관측점
 FACTORY_POINT = (5.0, -2.0)
-V_WALK = 0.35
+V_WALK = 0.22
 
 
 class Mission(Node):

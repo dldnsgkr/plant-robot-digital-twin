@@ -31,7 +31,7 @@ from std_msgs.msg import Bool, Float32
 FOUND_PPM = 50.0
 SURGE_PPM = 12.0      # 이 이상이면 플룸 내부로 보고 풍상 직진
 GRAD_MIN = 0.6        # 이보다 약한 구배는 난류 노이즈로 간주 (ppm/m)
-V_WALK = 0.35
+V_WALK = 0.22
 
 
 class SourceSeeker(Node):

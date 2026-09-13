@@ -21,7 +21,7 @@ sys.path.insert(0, __file__.rsplit("/", 3)[0]
                 + "/module3_gas_safety/return_to_home")
 from rth import astar  # noqa: E402
 
-V_WALK = 0.35
+V_WALK = 0.22
 
 
 class ZonePatrol(Node):
