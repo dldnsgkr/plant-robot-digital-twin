@@ -27,7 +27,7 @@ from std_msgs.msg import Bool, Float32
 HOME = (11.0, 7.5)
 RES = 0.25
 INFLATE = 0.4
-V_WALK = 0.22
+V_WALK = 0.35
 
 # 월드 기하 (plant_world.sdf — patrol_planner와 동일 모델)
 OBSTACLES = [

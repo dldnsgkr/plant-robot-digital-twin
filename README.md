@@ -79,6 +79,7 @@ docker compose exec -d sim bash -c "source /opt/ros/jazzy/setup.bash && ros2 lau
 docker compose exec -d sim bash -c "source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash && ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000"
 # 2) Unity Hub 에서 unity/PlantDigitalTwin 열기 → PlantDigitalTwin 씬 → Play
 #    (ROSConnection 오브젝트: 127.0.0.1:10000, 상단 HUD 가 초록이면 연결됨)
+#    Spot 은 spot_move 클립을 실제 속도(보폭 0.97 m/s 기준)에 맞춰 재생 — 발 미끄러짐 없음
 ```
 
 원본 모델 폴더 `Assets/00_Model`(262MB)은 git 에서 제외했다. 클론 후 `Doosanenerbility/Modeling` 의
