@@ -12,7 +12,7 @@ namespace PlantDT
         [Tooltip("이 속도(m/s) 이상이면 걷기 애니메이션")] public float movingThreshold = 0.04f;
         [Tooltip("애니메이션 재생 속도 = 실제속도 / 이 값")] public float animNominalSpeed = 0.5f;
         [Tooltip("높이(z) 흔들림 필터 시간(초)")] public float heightSmooth = 0.6f;
-        [Tooltip("이동 중 모델 방향을 몸체 yaw 대신 이동 방향(속도 벡터)으로 잡아 보행 헌팅을 숨김")] public bool headingFromVelocity = true;
+        [Tooltip("이동 중 모델 방향을 몸체 yaw 대신 이동 방향(속도 벡터)으로 잡아 보행 헌팅을 숨김")] public bool headingFromVelocity = false;   // 기본 끔: Gazebo 몸체 yaw 를 그대로 반영 (0.22 에서 요동 ±3.5° 로 충분히 작음)
         [Tooltip("방향 필터 시간(초)")] public float headingSmooth = 1.0f;
         Vector3 velFiltered; float headingYaw; bool headingInit;
         [Header("상태 (읽기 전용)")] public float speed;
@@ -47,7 +47,7 @@ namespace PlantDT
             if (headingFromVelocity && speedFiltered > movingThreshold && velFiltered.sqrMagnitude > 1e-4f)
                 yawDeg = Mathf.Atan2(velFiltered.x, velFiltered.z) * Mathf.Rad2Deg;
             if (!headingInit) { headingYaw = yawDeg; headingInit = true; }
-            headingYaw = Mathf.LerpAngle(headingYaw, yawDeg, 0.15f);
+            headingYaw = Mathf.LerpAngle(headingYaw, yawDeg, 0.25f);   // 37Hz 기준 약 0.1s 필터
             targetRot = Quaternion.Euler(0, headingYaw, 0) * baseRotation;
             var f = Quaternion.Euler(0, headingYaw, 0) * Vector3.forward; Forward = f;
             if (!has) { transform.position = targetPos; transform.rotation = targetRot; has = true; }
