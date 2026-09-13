@@ -13,11 +13,15 @@ namespace PlantDT
         public float fov = 90f;
         Camera cam;
 
+        const int RobotLayer = 30;   // 로봇 전용 레이어 (이름 없는 사용자 레이어) — POV 카메라는 이 레이어를 컬링해 자기 몸이 안 보이게
+
         public static RobotPovCamera Create(RobotPoseFollower robot)
         {
+            foreach (var t in robot.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = RobotLayer;
             var go = new GameObject("RobotPOVCamera");
             var pov = go.AddComponent<RobotPovCamera>(); pov.robot = robot;
             pov.cam = go.AddComponent<Camera>();
+            pov.cam.cullingMask = Camera.main != null ? (Camera.main.cullingMask & ~(1 << RobotLayer)) : ~(1 << RobotLayer);
             pov.cam.rect = pov.viewport; pov.cam.depth = 10; pov.cam.fieldOfView = pov.fov;
             pov.cam.nearClipPlane = 0.15f; pov.cam.farClipPlane = 200f;
             return pov;
