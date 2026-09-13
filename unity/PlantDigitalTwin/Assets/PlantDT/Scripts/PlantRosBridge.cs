@@ -15,8 +15,11 @@ namespace PlantDT
         [Header("상태 (읽기 전용)")] public int received;
         public Vector3 lastGzPos;
 
+        [Tooltip("에디터 Play 의 CPU 점유를 줄여 같은 Mac 의 Gazebo RTF 저하를 막는다 (0=제한 없음)")] public int targetFrameRate = 30;
+
         void Start()
         {
+            if (targetFrameRate > 0) { QualitySettings.vSyncCount = 0; Application.targetFrameRate = targetFrameRate; }
             if (robot == null) robot = FindFirstObjectByType<RobotPoseFollower>();
             ROSConnection.GetOrCreateInstance().Subscribe<OdometryMsg>(odomTopic, OnOdom);
             if (showRobotPov && robot != null && FindFirstObjectByType<RobotPovCamera>() == null) RobotPovCamera.Create(robot);
