@@ -29,7 +29,11 @@ from rth import astar  # noqa: E402  (월드 기하·A* 공유)
 
 GAUGE_VP = (38.0, 0.22)     # patrol_planner가 산출한 게이지 관측점
 FACTORY_POINT = (5.0, -2.0)
-V_WALK = 0.22
+V_WALK = 0.35
+# 경로 추종 조향(순수 추종형): 전방주시거리를 속도에 비례해 잡고(짧으면 고속에서 좌우 헌팅),
+# 방향 오차 P + 요 각속도 D 로 보행 지연에 의한 진동을 감쇠한다. 0.22 시절 값: 주시 0.5m, P 1.0, D 0
+LOOKAHEAD = max(0.6, 2.5 * V_WALK)
+K_YAW_P, K_YAW_D = 0.8, 0.35
 
 
 class Mission(Node):
@@ -37,6 +41,7 @@ class Mission(Node):
         super().__init__("mission_controller")
         self.state = "GOTO_GAUGE"
         self.pose = None
+        self.yaw_rate = 0.0
         self.path = None
         self.wp_i = 0
         self.t_state = 0.0
@@ -69,6 +74,7 @@ class Mission(Node):
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
         self.pose = (p.x, p.y, yaw)
+        self.yaw_rate = msg.twist.twist.angular.z
 
     def _on_gauge(self, msg):
         if self.state == "INSPECT":
@@ -99,7 +105,7 @@ class Mission(Node):
                 return False
         while self.wp_i < len(self.path) - 1 and \
                 math.hypot(self.path[self.wp_i][0] - x,
-                           self.path[self.wp_i][1] - y) < 0.5:
+                           self.path[self.wp_i][1] - y) < LOOKAHEAD:
             self.wp_i += 1
         tx, ty = self.path[self.wp_i]
         dx, dy = tx - x, ty - y
@@ -108,7 +114,7 @@ class Mission(Node):
         err = math.atan2(math.sin(target - yaw), math.cos(target - yaw))
         cmd = Twist()
         cmd.linear.x = V_WALK * max(0.0, math.cos(err))
-        cmd.angular.z = max(-0.4, min(0.4, 1.0 * err))
+        cmd.angular.z = max(-0.4, min(0.4, K_YAW_P * err - K_YAW_D * self.yaw_rate))
         self.pub_cmd.publish(cmd)
         return False
 

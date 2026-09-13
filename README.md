@@ -73,10 +73,9 @@ Unity 는 ROS-TCP-Connector 로 로봇 포즈(`/model/go2/odometry`)를 받아 S
 실행 순서:
 
 ```bash
-# 1) 컨테이너: 시뮬레이션 + Unity 엔드포인트
-cd docker && docker compose up -d
-docker compose exec -d sim bash -c "source /opt/ros/jazzy/setup.bash && ros2 launch /ws/src/plant_dt/simulation/launch/plant_dt.launch.py mission:=true rth_start_pct:=50.0"
-docker compose exec -d sim bash /ws/src/plant_dt/docker/unity_endpoint.sh   # 엔드포인트 + 소켓 결함 자동 재시작 감시
+# 1) 컨테이너: 시뮬레이션 + Unity 엔드포인트 (컨테이너 재시작 → noVNC → 엔드포인트 감시기 → 미션)
+bash docker/run_mission.sh 50.0        # 항상 이 스크립트로 재시작할 것 (pkill 재시작은 고아 브리지가 쌓여 RTF 급락·전도)
+bash docker/mission_report.sh          # 타임라인·넘어짐·고아 브리지·RTF 요약
 # 2) Unity Hub 에서 unity/PlantDigitalTwin 열기 → PlantDigitalTwin 씬 → Play
 #    (ROSConnection 오브젝트: 127.0.0.1:10000, 상단 HUD 가 초록이면 연결됨)
 #    Spot 은 spot_move 클립을 실제 속도(보폭 0.97 m/s 기준)에 맞춰 재생 — 발 미끄러짐 없음

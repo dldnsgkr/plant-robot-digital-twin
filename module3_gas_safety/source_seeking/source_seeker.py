@@ -31,7 +31,9 @@ from std_msgs.msg import Bool, Float32
 FOUND_PPM = 50.0
 SURGE_PPM = 12.0      # 이 이상이면 플룸 내부로 보고 풍상 직진
 GRAD_MIN = 0.6        # 이보다 약한 구배는 난류 노이즈로 간주 (ppm/m)
-V_WALK = 0.22
+V_WALK = 0.35
+LOOKAHEAD = max(0.6, 2.5 * V_WALK)   # 경로 추종 전방주시거리 (속도 비례; 짧으면 고속 헌팅)
+K_YAW_P, K_YAW_D = 0.8, 0.35          # 방향 오차 P + 요 각속도 D
 
 
 class SourceSeeker(Node):
@@ -43,6 +45,7 @@ class SourceSeeker(Node):
         self.alarmed = False
         self.samples = deque(maxlen=40)   # (x, y, C) @5Hz → 8s 윈도
         self.pose = None                  # (x, y, yaw)
+        self.yaw_rate = 0.0
         self.conc = 0.0
         self.found_since = None
         self.done = False
@@ -94,6 +97,7 @@ class SourceSeeker(Node):
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
         self.pose = (p.x, p.y, yaw)
+        self.yaw_rate = msg.twist.twist.angular.z
 
     def _on_gas(self, msg):
         self.conc = msg.data
@@ -210,7 +214,7 @@ class SourceSeeker(Node):
             err = math.atan2(math.sin(target - self.pose[2]),
                              math.cos(target - self.pose[2]))
             cmd.linear.x = V_WALK * max(0.0, math.cos(err))
-            cmd.angular.z = max(-0.4, min(0.4, 1.0 * err))
+            cmd.angular.z = max(-0.4, min(0.4, K_YAW_P * err - K_YAW_D * self.yaw_rate))
             self.cast_t = 0.0
             self._dbg = ("SURGE" if in_plume else "CLIMB", target)
         else:

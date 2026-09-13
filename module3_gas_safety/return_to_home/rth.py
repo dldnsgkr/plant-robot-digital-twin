@@ -27,7 +27,9 @@ from std_msgs.msg import Bool, Float32
 HOME = (11.0, 7.5)
 RES = 0.25
 INFLATE = 0.4
-V_WALK = 0.22
+V_WALK = 0.35
+LOOKAHEAD = max(0.6, 2.5 * V_WALK)   # 경로 추종 전방주시거리 (속도 비례; 짧으면 고속 헌팅)
+K_YAW_P, K_YAW_D = 0.8, 0.35          # 방향 오차 P + 요 각속도 D
 
 # 월드 기하 (plant_world.sdf — patrol_planner와 동일 모델)
 OBSTACLES = [
@@ -103,6 +105,7 @@ class Rth(Node):
         self.declare_parameter("drain_idle", 0.05)
         self.battery = self.get_parameter("start_pct").value
         self.pose = None
+        self.yaw_rate = 0.0
         self.speed = 0.0
         self.active = False
         self.docked = False
@@ -125,6 +128,7 @@ class Rth(Node):
         yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
                          1 - 2 * (q.y * q.y + q.z * q.z))
         self.pose = (p.x, p.y, yaw)
+        self.yaw_rate = msg.twist.twist.angular.z
         self.speed = math.hypot(msg.twist.twist.linear.x,
                                 msg.twist.twist.linear.y)
 
@@ -174,7 +178,7 @@ class Rth(Node):
         # 룩어헤드: 현재 위치에서 0.3m 이내 waypoint는 통과 처리
         while self.wp_i < len(self.path) - 1 and \
                 math.hypot(self.path[self.wp_i][0] - x,
-                           self.path[self.wp_i][1] - y) < 0.5:
+                           self.path[self.wp_i][1] - y) < LOOKAHEAD:
             self.wp_i += 1
         tx, ty = self.path[self.wp_i]
         dx, dy = tx - x, ty - y
@@ -190,7 +194,7 @@ class Rth(Node):
         err = math.atan2(math.sin(target - yaw), math.cos(target - yaw))
         cmd = Twist()
         cmd.linear.x = V_WALK * max(0.0, math.cos(err))
-        cmd.angular.z = max(-0.4, min(0.4, 1.0 * err))
+        cmd.angular.z = max(-0.4, min(0.4, K_YAW_P * err - K_YAW_D * self.yaw_rate))
         self.pub_cmd.publish(cmd)
 
 
