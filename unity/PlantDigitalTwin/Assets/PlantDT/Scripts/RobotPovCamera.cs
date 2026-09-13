@@ -7,7 +7,8 @@ namespace PlantDT
     public class RobotPovCamera : MonoBehaviour
     {
         public RobotPoseFollower robot;
-        [Tooltip("로봇 기준 위치: 앞(m), 위(m)")] public float forward = 0.35f, up = 0.30f;
+        [Tooltip("로봇 기준 위치: 앞(m), 위(m) — Spot 몸통 길이 0.85, 높이 0.66 → 코 앞·상단 (다리가 안 보이게)")] public float forward = 0.50f, up = 0.62f;
+        [Tooltip("아래로 기울임(도)")] public float pitchDown = 8f;
         [Tooltip("화면 내 위치·크기 (뷰포트 비율)")] public Rect viewport = new Rect(0.70f, 0.04f, 0.28f, 0.28f);
         public float fov = 90f;
         Camera cam;
@@ -18,7 +19,7 @@ namespace PlantDT
             var pov = go.AddComponent<RobotPovCamera>(); pov.robot = robot;
             pov.cam = go.AddComponent<Camera>();
             pov.cam.rect = pov.viewport; pov.cam.depth = 10; pov.cam.fieldOfView = pov.fov;
-            pov.cam.nearClipPlane = 0.05f; pov.cam.farClipPlane = 200f;
+            pov.cam.nearClipPlane = 0.15f; pov.cam.farClipPlane = 200f;
             return pov;
         }
 
@@ -27,7 +28,7 @@ namespace PlantDT
             if (robot == null) return;
             var fwd = robot.Forward; if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
             transform.position = robot.transform.position + fwd * forward + Vector3.up * up;
-            transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+            transform.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitchDown, 0, 0);
         }
 
         void OnGUI()
