@@ -6,8 +6,9 @@ namespace PlantDT
     public class FollowCamera : MonoBehaviour
     {
         public Transform target;
-        public Vector3 offset = new Vector3(0f, 1.4f, -2.2f);   // 로컬: 위 1.4m, 뒤 2.2m (스폰 55 → 57.2, 복도 끝벽 57.5 안쪽)
+        public Vector3 offset = new Vector3(0f, 1.6f, -2.4f);   // 위 1.6m, 뒤 2.4m (스폰 55 → 57.4, 복도 끝벽 57.5 안쪽)
         public float smooth = 0.25f;
+        [Tooltip("카메라 기준 방향 필터(초). 로봇 몸체의 보행 요동(±8°)이 카메라에 전달되지 않도록 길게")] public float headingSmooth = 3.0f;
 
         RobotPoseFollower follower; Vector3 fwdSmooth = Vector3.forward;
 
@@ -19,7 +20,7 @@ namespace PlantDT
             // 프리팹 루트 회전(모델 세우기용)에 영향받지 않도록 수평 진행 방향만 사용
             var fwd = follower != null ? follower.Forward : Vector3.ProjectOnPlane(target.forward, Vector3.up);
             if (fwd.sqrMagnitude < 1e-4f) fwd = fwdSmooth;
-            fwdSmooth = Vector3.Slerp(fwdSmooth, fwd.normalized, 1f - Mathf.Exp(-Time.deltaTime / Mathf.Max(smooth, 1e-3f)));
+            fwdSmooth = Vector3.Slerp(fwdSmooth, fwd.normalized, 1f - Mathf.Exp(-Time.deltaTime / Mathf.Max(headingSmooth, 1e-3f)));
             var frame = Quaternion.LookRotation(fwdSmooth, Vector3.up);
             var want = target.position + frame * offset;
             float k = smooth <= 0 ? 1f : 1f - Mathf.Exp(-Time.deltaTime / smooth);

@@ -20,12 +20,25 @@ namespace PlantDT
             ROSConnection.GetOrCreateInstance().Subscribe<OdometryMsg>(odomTopic, OnOdom);
         }
 
+        // Game 뷰 좌상단 HUD: 연결·수신·로봇 포즈·속도·카메라 (스크린샷 대조용)
+        void OnGUI()
+        {
+            var st = new GUIStyle(GUI.skin.label) { fontSize = 14, normal = { textColor = Color.white } };
+            float spd = robot != null ? robot.speed : 0f;
+            var cam = Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+            string txt = $"odom recv={received}  gz pos=({lastGzPos.x:F2}, {lastGzPos.y:F2}, {lastGzPos.z:F2})  yaw={lastYawDeg:F0}°  v={spd:F2} m/s\n" +
+                         $"unity robot={(robot != null ? robot.transform.position : Vector3.zero)}  cam={cam}  moving={(spd > 0.04f)}";
+            GUI.Box(new Rect(8, 30, 620, 46), "");
+            GUI.Label(new Rect(14, 32, 610, 44), txt, st);
+        }
+        public float lastYawDeg;
+
         void OnOdom(OdometryMsg m)
         {
             var p = m.pose.pose.position; var q = m.pose.pose.orientation;
             // yaw (z축 회전) — ROS 쿼터니언 → yaw
             float yaw = Mathf.Atan2(2f * (float)(q.w * q.z + q.x * q.y), 1f - 2f * (float)(q.y * q.y + q.z * q.z));
-            lastGzPos = new Vector3((float)p.x, (float)p.y, (float)p.z); received++;
+            lastGzPos = new Vector3((float)p.x, (float)p.y, (float)p.z); received++; lastYawDeg = yaw * Mathf.Rad2Deg;
             if (robot != null) robot.SetPoseGz((float)p.x, (float)p.y, (float)p.z, yaw);
         }
     }
