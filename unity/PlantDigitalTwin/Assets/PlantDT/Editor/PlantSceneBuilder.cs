@@ -100,7 +100,7 @@ namespace PlantDT
             // ---- 조명·환경 세팅 (에셋 제공 프리팹) + 가스 분출 이펙트 (가스탱크 옆, 초기 비활성) ----
             Place("effect/Doosan_MapSetting", "MapSetting");
             var gas = Place("effect/gas_spurt_1", "GasSpurt");
-            if (gas != null) { gas.transform.position = Gz(-7.5f, 6f, 1.0f); gas.SetActive(false); }
+            if (gas != null) { gas.transform.position = Gz(-7.5f, 6f, 0f); FixGasEffect(gas); gas.SetActive(false); }
 
             // ---- ROS 연결 (ros_tcp_endpoint, 컨테이너 포트 10000) + 포즈 브리지 ----
             var rosGo = new GameObject("ROSConnection");
@@ -299,6 +299,36 @@ namespace PlantDT
             var bm = new Material(Shader.Find("HDRP/Lit")); bm.SetColor("_BaseColor", new Color(0.15f, 0.15f, 0.17f)); bm.name = "GaugeCase_Mat";
             AssetDatabase.CreateAsset(bm, "Assets/PlantDT/GaugeCase_Mat.mat"); back.GetComponent<Renderer>().sharedMaterial = bm;
             Debug.Log($"[PlantDT] gauge panel at gz(38,1.58,0.6), dial texture={(tex != null)}");
+        }
+
+        // 에셋 gas_spurt 프리팹은 내장 기본 파티클 재질(HDRP 미지원 → 렌더 안 됨)을 쓰고 이미터가 4.35m 오프셋에 있다.
+        // HDRP 투명 Unlit 재질 + 부드러운 원 텍스처로 초록 가스 제트(영상과 같은 연출)로 바꾸고 이미터를 원점(높이 0.9m)에 둔다.
+        static void FixGasEffect(GameObject gas)
+        {
+            var ps = gas.GetComponentInChildren<ParticleSystem>(true); if (ps == null) { Debug.LogWarning("[PlantDT] gas effect: no ParticleSystem"); return; }
+            ps.transform.localPosition = new Vector3(0, 0.9f, 0); ps.transform.localRotation = Quaternion.Euler(-15f, 0, 0);   // 살짝 위로
+            gas.transform.rotation = Quaternion.LookRotation(Gz(1, 0, 0), Vector3.up);                                    // 탱크(-x) → 공장 중앙(+x) 방향 분사
+            var main = ps.main; main.playOnAwake = true; main.loop = true; main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.5f); main.startLifetime = new ParticleSystem.MinMaxCurve(1.0f, 1.6f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 5f); main.startColor = new Color(0.4f, 1f, 0.5f, 0.5f); main.maxParticles = 800;
+            var em = ps.emission; em.enabled = true; em.rateOverTime = 150f;
+            var shape = ps.shape; shape.enabled = true; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 14f; shape.radius = 0.04f;
+            var sol = ps.sizeOverLifetime; sol.enabled = true; sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0, 0.4f, 1, 2.0f));
+            var col = ps.colorOverLifetime; col.enabled = true; var g = new Gradient();
+            g.SetKeys(new[] { new GradientColorKey(new Color(0.4f, 1f, 0.5f), 0), new GradientColorKey(new Color(0.7f, 1f, 0.8f), 1) },
+                      new[] { new GradientAlphaKey(0.8f, 0), new GradientAlphaKey(0f, 1) });
+            col.color = g;
+            // 부드러운 원 텍스처 (절차 생성)
+            const int N = 64; var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { name = "soft_particle" };
+            for (int y = 0; y < N; y++) for (int x = 0; x < N; x++)
+            { float d = Vector2.Distance(new Vector2(x, y), new Vector2(N / 2f, N / 2f)) / (N / 2f); float a = Mathf.Clamp01(1f - d); a = a * a; tex.SetPixel(x, y, new Color(1, 1, 1, a)); }
+            tex.Apply(); Directory.CreateDirectory("Assets/PlantDT/Textures"); AssetDatabase.CreateAsset(tex, "Assets/PlantDT/Textures/soft_particle.asset");
+            var mat = new Material(Shader.Find("HDRP/Unlit")) { name = "GasParticle_Mat" };
+            mat.SetTexture("_UnlitColorMap", tex); mat.SetColor("_UnlitColor", new Color(0.45f, 1f, 0.55f, 0.35f));
+            HDMaterial.SetSurfaceType(mat, true); HDMaterial.SetAlphaClipping(mat, false); HDMaterial.ValidateMaterial(mat);
+            AssetDatabase.CreateAsset(mat, "Assets/PlantDT/GasParticle_Mat.mat");
+            var r = ps.GetComponent<ParticleSystemRenderer>(); r.sharedMaterial = mat; r.renderMode = ParticleSystemRenderMode.Billboard;
+            Debug.Log("[PlantDT] gas effect: HDRP particle material applied");
         }
 
         static int Dominant(Vector3 v) { var a = new[] { Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z) }; return a[0] >= a[1] && a[0] >= a[2] ? 0 : (a[1] >= a[2] ? 1 : 2); }

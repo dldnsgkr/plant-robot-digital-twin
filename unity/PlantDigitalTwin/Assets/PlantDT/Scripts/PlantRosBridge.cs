@@ -129,6 +129,12 @@ namespace PlantDT
                          $"압력계: {(gaugeBar < 0 ? "-" : gaugeBar.ToString("F2") + " bar")}   가스: {gasPpm:F1} ppm{(gasAlarm ? "  ⚠ 알람" : "")}{(gasFound ? "  ✔ 누출원 발견" : "")}";
             GUI.Box(new Rect(8, 30, 620, 84), ""); GUI.Label(new Rect(14, 32, 610, 82), txt, st);
 
+            // 가스 농도 (영상 스타일, 왼쪽 위 HUD 아래에 크게)
+            if (missionState == "GOTO_FACTORY" || missionState == "SEEK" || missionState == "WAIT_RTH" || missionState == "DONE")
+            {
+                var gs = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, normal = { textColor = gasPpm > 50f ? new Color(1f, 0.5f, 0.3f) : new Color(0.6f, 1f, 0.7f) } };
+                GUI.Label(new Rect(14, 118, 500, 30), $"현재 가스 농도: {gasPpm:F1} ppm", gs);
+            }
             // 판독 배너
             if (missionState == "ALIGN" || missionState == "INSPECT")
             {
