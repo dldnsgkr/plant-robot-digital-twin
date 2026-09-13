@@ -20,11 +20,8 @@ ROOT = "/ws/src/plant_dt"
 
 
 def py(path, *args, **kw):
-    # use_sim_time: 제어 노드 타이머가 /clock(시뮬 시간)을 따르게 한다. 벽시계 타이머면 RTF 가
-    # 떨어질 때(같은 Mac 에서 Unity Play 등) 물리 1초당 제어 루프가 수 배 더 돌아 갈팡질팡·전도가 난다.
     return ExecuteProcess(
-        cmd=["python3", os.path.join(ROOT, path)] + list(args)
-            + ["--ros-args", "-p", "use_sim_time:=true"],
+        cmd=["python3", os.path.join(ROOT, path)] + list(args),
         output="screen", **kw)
 
 
