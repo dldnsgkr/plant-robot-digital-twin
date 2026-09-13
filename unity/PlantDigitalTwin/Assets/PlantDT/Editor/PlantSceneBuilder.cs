@@ -94,6 +94,9 @@ namespace PlantDT
                 follower.animator = SetupSpotAnimator(robot);
             }
 
+            // ---- 게이지 패널: Gazebo gauge_panel (38, 1.62, 0.6) 과 같은 자리, 복도 북벽 안쪽면에 눈금판 ----
+            BuildGaugePanel();
+
             // ---- 조명·환경 세팅 (에셋 제공 프리팹) + 가스 분출 이펙트 (가스탱크 옆, 초기 비활성) ----
             Place("effect/Doosan_MapSetting", "MapSetting");
             var gas = Place("effect/gas_spurt_1", "GasSpurt");
@@ -269,6 +272,33 @@ namespace PlantDT
                 mf.sharedMesh = mesh;
                 Debug.Log($"[PlantDT] cut {childName}/{src.name}: {removed} triangles removed → {path}");
             }
+        }
+
+        static void BuildGaugePanel()
+        {
+            // 눈금판 텍스처: 리포의 simulation/models/gauge/dial.png (make_dial.py 생성) 을 프로젝트로 복사
+            Directory.CreateDirectory("Assets/PlantDT/Textures");
+            var src = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../simulation/models/gauge/dial.png"));
+            const string dst = "Assets/PlantDT/Textures/dial.png";
+            if (File.Exists(src)) { File.Copy(src, dst, true); AssetDatabase.ImportAsset(dst); }
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(dst);
+            var panel = GameObject.CreatePrimitive(PrimitiveType.Quad); panel.name = "GaugePanel";
+            Object.DestroyImmediate(panel.GetComponent<Collider>());
+            panel.transform.position = Gz(38f, 1.58f, 0.6f);                 // 북벽(y=+1.75) 안쪽에 살짝 띄움
+            panel.transform.rotation = Quaternion.LookRotation(Gz(0, 1, 0), Vector3.up);   // 면이 복도 중앙(-y)을 향하도록
+            panel.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+            var mat = new Material(Shader.Find("HDRP/Lit")); mat.name = "GaugeDial_Mat";
+            if (tex != null) mat.SetTexture("_BaseColorMap", tex);
+            mat.SetColor("_BaseColor", Color.white); mat.SetFloat("_Smoothness", 0.2f);
+            AssetDatabase.CreateAsset(mat, "Assets/PlantDT/GaugeDial_Mat.mat");
+            panel.GetComponent<Renderer>().sharedMaterial = mat;
+            // 뒤판(벽걸이 케이스)
+            var back = GameObject.CreatePrimitive(PrimitiveType.Cube); back.name = "GaugeCase"; back.transform.SetParent(panel.transform, false);
+            Object.DestroyImmediate(back.GetComponent<Collider>());
+            back.transform.localPosition = new Vector3(0, 0, 0.03f); back.transform.localScale = new Vector3(1.1f, 1.1f, 0.06f);
+            var bm = new Material(Shader.Find("HDRP/Lit")); bm.SetColor("_BaseColor", new Color(0.15f, 0.15f, 0.17f)); bm.name = "GaugeCase_Mat";
+            AssetDatabase.CreateAsset(bm, "Assets/PlantDT/GaugeCase_Mat.mat"); back.GetComponent<Renderer>().sharedMaterial = bm;
+            Debug.Log($"[PlantDT] gauge panel at gz(38,1.58,0.6), dial texture={(tex != null)}");
         }
 
         static int Dominant(Vector3 v) { var a = new[] { Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z) }; return a[0] >= a[1] && a[0] >= a[2] ? 0 : (a[1] >= a[2] ? 1 : 2); }
