@@ -59,6 +59,8 @@ namespace PlantDT
         void Update()
         {
             if (!has) return;
+            // 포즈 갱신이 끊기면(연결 끊김·미션 종료) 속도 추정을 0 으로 감쇠 → 다리만 계속 움직이는 상태 방지
+            if (Time.time - lastTargetTime > 0.5f) speedFiltered = Mathf.Lerp(speedFiltered, 0f, Time.deltaTime * 4f);
             speed = speedFiltered;
             if (animator != null)
             {
