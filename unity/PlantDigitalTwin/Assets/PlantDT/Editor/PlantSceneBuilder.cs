@@ -41,6 +41,14 @@ namespace PlantDT
             var factory = Place("Map/factory_inner_1", "Factory");
             OrientLongAxisToZ(factory);
             AlignBounds(factory, centerGz: new Vector3(0, 0, 0), sizeGz: new Vector3(25f, 18f, 0), scaleToFit: false);
+            // Gazebo 월드(plant_assets/convert.py)와 동일한 절단: 로봇 경로와 겹치는 동측 스트립 구조물 제거
+            //  - FC_Fence_2(동측 구조물), FC_Fence_01_3(펜스): 오브젝트 비활성
+            //  - FC_Fence_01 속 내부 칸막이벽(gz x≈7.0~7.7), FC_Fence_01_6 남벽 앞 설비(gz x -7.7~-5.8, y -8.65~-6.8): 삼각형 절단
+            //  (프리팹 자식 이름이 FBX 노드명과 달라 이름 대신 월드 좌표 범위로 선택)
+            DisableRenderersInside(factory, GzBox(7.0f, 12.55f, -8.6f, 8.6f, -0.1f, 6.5f));   // (별도 오브젝트일 때) 동측 구조물
+            CutTriangles(factory, GzBox(7.0f, 7.73f, -8.8f, 8.8f, 0f, 7.5f));                  // 내부 칸막이벽 (전체 높이)
+            CutTriangles(factory, GzBox(7.3f, 12.4f, -8.5f, 8.5f, 0.02f, 6.0f));               // 동측 스트립 구조물·펜스 (바닥·동벽·지붕 제외)
+            CutTriangles(factory, GzBox(-7.68f, -5.78f, -8.65f, -6.8f, 0f, 3.0f));             // 남벽 앞 설비
             var corridor = Place("Map/factory_hall_1", "Corridor");
             OrientLongAxisToZ(corridor);
             AlignBounds(corridor, centerGz: new Vector3(35f, 0, 0), sizeGz: new Vector3(45f, 3.5f, 0), scaleToFit: true);
@@ -213,6 +221,54 @@ namespace PlantDT
         {
             var g = AssetDatabase.FindAssets($"t:AnimationClip {name}").Select(AssetDatabase.GUIDToAssetPath).FirstOrDefault(p => p.EndsWith($"/{name}.anim"));
             return g == null ? null : AssetDatabase.LoadAssetAtPath<AnimationClip>(g);
+        }
+
+        // Gazebo 축 박스(x0~x1, y0~y1, z0~z1) → Unity 월드 Bounds  (Unity.x = -gz.y, Unity.y = gz.z, Unity.z = gz.x)
+        static Bounds GzBox(float x0, float x1, float y0, float y1, float z0, float z1)
+        {
+            var min = new Vector3(-y1, z0, x0); var max = new Vector3(-y0, z1, x1);
+            var b = new Bounds(); b.SetMinMax(min, max); return b;
+        }
+
+        // 렌더 바운드가 월드 박스 안에 완전히 들어가는 자식 오브젝트를 비활성화 (건물 전체 쉘·바닥·지붕은 박스보다 커서 제외됨)
+        static void DisableRenderersInside(GameObject root, Bounds worldBox)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var b = r.bounds;
+                if (worldBox.Contains(b.min) && worldBox.Contains(b.max))
+                { r.gameObject.SetActive(false); Debug.Log($"[PlantDT] disabled {r.name} (bounds {b.size})"); }
+            }
+        }
+
+        // 모든 자식 메시에서, 월드 좌표 박스 안에 중심이 있는 삼각형을 제거한 메시 사본을 만들어 교체
+        static void CutTriangles(GameObject root, Bounds worldBox)
+        {
+            Directory.CreateDirectory("Assets/PlantDT/Meshes");
+            foreach (var mf in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null || !mf.gameObject.activeInHierarchy) continue;
+                var rb = mf.GetComponent<Renderer>(); if (rb == null || !rb.bounds.Intersects(worldBox)) continue;
+                string childName = mf.name;
+                var src = mf.sharedMesh; var verts = src.vertices; var l2w = mf.transform.localToWorldMatrix;
+                var mesh = Object.Instantiate(src); mesh.name = $"{src.name}_cut"; int removed = 0;
+                for (int sm = 0; sm < src.subMeshCount; sm++)
+                {
+                    var tris = src.GetTriangles(sm); var keep = new System.Collections.Generic.List<int>(tris.Length);
+                    for (int i = 0; i < tris.Length; i += 3)
+                    {
+                        var c = (l2w.MultiplyPoint3x4(verts[tris[i]]) + l2w.MultiplyPoint3x4(verts[tris[i + 1]]) + l2w.MultiplyPoint3x4(verts[tris[i + 2]])) / 3f;
+                        if (worldBox.Contains(c)) { removed++; continue; }
+                        keep.Add(tris[i]); keep.Add(tris[i + 1]); keep.Add(tris[i + 2]);
+                    }
+                    mesh.SetTriangles(keep, sm);
+                }
+                if (removed == 0) { Object.DestroyImmediate(mesh); continue; }
+                var path = AssetDatabase.GenerateUniqueAssetPath($"Assets/PlantDT/Meshes/{src.name}_cut.asset");
+                AssetDatabase.CreateAsset(mesh, path);
+                mf.sharedMesh = mesh;
+                Debug.Log($"[PlantDT] cut {childName}/{src.name}: {removed} triangles removed → {path}");
+            }
         }
 
         static int Dominant(Vector3 v) { var a = new[] { Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z) }; return a[0] >= a[1] && a[0] >= a[2] ? 0 : (a[1] >= a[2] ? 1 : 2); }
