@@ -30,6 +30,7 @@ namespace PlantDT
         public float gaugeBar = -1f; public float gaugeReadTime = -1f;
         readonly List<string> events = new();
         float t0 = -1f;
+        LineRenderer scanBeam;   // 판독 중 로봇 머리 → 게이지 스캔 빔
 
         static Vector3 Gz(float x, float y, float z) => new Vector3(-y, z, x);
         static readonly Dictionary<string, string> StateKo = new()
@@ -57,6 +58,27 @@ namespace PlantDT
             ros.Subscribe<PointMsg>("/gas/source_truth", m => { gasSourceGz = new Vector3((float)m.x, (float)m.y, (float)m.z); hasGasSource = true; });
             ros.Subscribe<Float32Msg>("/inspection/gauge_value", m => { gaugeBar = m.data; gaugeReadTime = Time.time; });
             if (showRobotPov && robot != null && FindFirstObjectByType<RobotPovCamera>() == null) RobotPovCamera.Create(robot);
+        }
+
+        void Update()
+        {
+            // 게이지 판독 연출: ALIGN/INSPECT 동안 로봇 머리에서 게이지 패널로 깜박이는 스캔 빔
+            bool reading = missionState == "ALIGN" || missionState == "INSPECT";
+            if (reading && robot != null && gaugePanel != null)
+            {
+                if (scanBeam == null)
+                {
+                    var go = new GameObject("GaugeScanBeam"); scanBeam = go.AddComponent<LineRenderer>();
+                    scanBeam.material = new Material(Shader.Find("HDRP/Unlit")); scanBeam.widthMultiplier = 0.03f; scanBeam.positionCount = 2;
+                }
+                float pulse = 0.55f + 0.45f * Mathf.Sin(Time.time * 6f);
+                var col = missionState == "INSPECT" ? new Color(0.2f, 1f, 0.4f, pulse) : new Color(1f, 0.85f, 0.2f, pulse);
+                scanBeam.material.SetColor("_UnlitColor", col); scanBeam.startColor = scanBeam.endColor = col;
+                scanBeam.SetPosition(0, robot.transform.position + Vector3.up * 0.55f + robot.Forward * 0.4f);
+                scanBeam.SetPosition(1, gaugePanel.position);
+                scanBeam.enabled = true;
+            }
+            else if (scanBeam != null) scanBeam.enabled = false;
         }
 
         void OnState(string s)
@@ -107,6 +129,13 @@ namespace PlantDT
                          $"압력계: {(gaugeBar < 0 ? "-" : gaugeBar.ToString("F2") + " bar")}   가스: {gasPpm:F1} ppm{(gasAlarm ? "  ⚠ 알람" : "")}{(gasFound ? "  ✔ 누출원 발견" : "")}";
             GUI.Box(new Rect(8, 30, 620, 84), ""); GUI.Label(new Rect(14, 32, 610, 82), txt, st);
 
+            // 판독 배너
+            if (missionState == "ALIGN" || missionState == "INSPECT")
+            {
+                var c = GUI.color; GUI.color = new Color(0.2f, 0.7f, 1f, 0.85f);
+                GUI.Box(new Rect(Screen.width / 2 - 220, 8, 440, 34), "");
+                GUI.color = c; GUI.Label(new Rect(Screen.width / 2 - 220, 8, 440, 34), missionState == "ALIGN" ? "게이지 방향 정렬 중…" : $"압력계 판독 중…  {(gaugeBar < 0 ? "" : gaugeBar.ToString("F2") + " bar")}", big);
+            }
             // 가스 알람 배너
             if (gasAlarm)
             {
