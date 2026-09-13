@@ -11,6 +11,7 @@ namespace PlantDT
     {
         public string odomTopic = "/model/go2/odometry";
         public RobotPoseFollower robot;
+        [Tooltip("Game 뷰 오른쪽 아래에 로봇 시점 PIP 표시")] public bool showRobotPov = true;
         [Header("상태 (읽기 전용)")] public int received;
         public Vector3 lastGzPos;
 
@@ -18,6 +19,7 @@ namespace PlantDT
         {
             if (robot == null) robot = FindFirstObjectByType<RobotPoseFollower>();
             ROSConnection.GetOrCreateInstance().Subscribe<OdometryMsg>(odomTopic, OnOdom);
+            if (showRobotPov && robot != null && FindFirstObjectByType<RobotPovCamera>() == null) RobotPovCamera.Create(robot);
         }
 
         // Game 뷰 좌상단 HUD: 연결·수신·로봇 포즈·속도·카메라 (스크린샷 대조용)
