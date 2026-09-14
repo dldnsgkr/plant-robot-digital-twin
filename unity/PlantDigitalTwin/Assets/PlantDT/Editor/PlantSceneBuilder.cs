@@ -106,6 +106,8 @@ namespace PlantDT
             var rosGo = new GameObject("ROSConnection");
             var ros = rosGo.AddComponent<Unity.Robotics.ROSTCPConnector.ROSConnection>();
             ros.RosIPAddress = "127.0.0.1"; ros.RosPort = 10000; ros.ConnectOnStart = true;
+            // 엔드포인트(컨테이너) 재시작으로 소켓이 죽었을 때 Play 정지/재접속에서 메인 스레드가 오래 막히지 않도록 짧은 타임아웃
+            ros.NetworkTimeoutSeconds = 2f; ros.KeepaliveTime = 1f; ros.SleepTimeSeconds = 0.05f;
             var bridge = new GameObject("PlantRosBridge").AddComponent<PlantRosBridge>();
             if (robot != null) bridge.robot = robot.GetComponent<RobotPoseFollower>();
 
