@@ -29,6 +29,22 @@ namespace PlantDT
 
         static Vector3 Gz(float x, float y, float z) => new Vector3(-y, z, x);
 
+        [Tooltip("몸통 롤·피치(넘어짐 등)를 그대로 반영")] public bool applyFullOrientation = true;
+        [Tooltip("이 각도(rad) 이상 기울면 넘어진 것으로 보고 다리 애니메이션 정지")] public float fallenAngle = 0.9f;
+        public bool Fallen { get; private set; }
+        Quaternion fullRotGz = Quaternion.identity; float rollAbs, pitchAbs;
+
+        /// Gazebo 쿼터니언(x,y,z,w) 포함 버전: 롤·피치까지 반영
+        public void SetPoseGz(float x, float y, float z, float yaw, float qx, float qy, float qz, float qw)
+        {
+            // 좌표 변환 (x,y,z)→(-y,z,x) 는 반사를 포함 → 쿼터니언 (qx,qy,qz,qw) → (qy,−qz,−qx,qw)
+            fullRotGz = new Quaternion(qy, -qz, -qx, qw);
+            rollAbs = Mathf.Abs(Mathf.Atan2(2f * (qw * qx + qy * qz), 1f - 2f * (qx * qx + qy * qy)));
+            pitchAbs = Mathf.Abs(Mathf.Asin(Mathf.Clamp(2f * (qw * qy - qz * qx), -1f, 1f)));
+            Fallen = rollAbs > fallenAngle || pitchAbs > fallenAngle;
+            SetPoseGz(x, y, z, yaw);
+        }
+
         /// Gazebo 좌표(x,y,z m) 와 yaw(rad, z축 반시계) 로 목표 포즈 설정
         public void SetPoseGz(float x, float y, float z, float yaw)
         {
@@ -56,7 +72,8 @@ namespace PlantDT
                 yawDeg = Mathf.Atan2(velFiltered.x, velFiltered.z) * Mathf.Rad2Deg;
             if (!headingInit) { headingYaw = yawDeg; headingInit = true; }
             headingYaw = Mathf.LerpAngle(headingYaw, yawDeg, 0.25f);   // 37Hz 기준 약 0.1s 필터
-            targetRot = Quaternion.Euler(0, headingYaw, 0) * baseRotation;
+            // 자세: 전체 자세 반영이면 Gazebo 쿼터니언 그대로(넘어짐·기울기 표현), 아니면 yaw 만
+            targetRot = (applyFullOrientation ? fullRotGz : Quaternion.Euler(0, headingYaw, 0)) * baseRotation;
             var f = Quaternion.Euler(0, headingYaw, 0) * Vector3.forward; Forward = f;
             if (!has) { transform.position = targetPos; transform.rotation = targetRot; has = true; }
         }
@@ -72,7 +89,7 @@ namespace PlantDT
             speed = speedFiltered;
             if (animator != null)
             {
-                bool moving = speed > movingThreshold;
+                bool moving = speed > movingThreshold && !Fallen;   // 넘어진 동안 다리 정지
                 animator.SetBool("moving", moving);
                 animator.speed = moving ? Mathf.Clamp(speed / Mathf.Max(animNominalSpeed, 0.05f), 0.1f, 3f) : 1f;   // 보폭 기준 정확 매칭 (미끄러짐 방지)
             }

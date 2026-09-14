@@ -28,6 +28,10 @@ namespace PlantDT
         public string missionState = ""; public float battery = -1f; public bool docked;
         public bool gasAlarm; public float gasPpm; public bool gasFound; public Vector3 gasSourceGz; public bool hasGasSource;
         public float gaugeBar = -1f; public float gaugeReadTime = -1f;
+        public float maxTemp = -1f; public bool overheat; public bool recovering; public Vector3 gasEstimateGz; public bool hasGasEstimate;
+        const float OverheatC = 60f;   // thermal_fusion.py OVERHEAT_C
+        GameObject estimateMarker; LineRenderer trail; Vector3 lastTrailPt; int trailCount;
+        Renderer padRenderer; Material padMat, padMatOn; Renderer pipeRenderer; Material pipeMat, pipeMatHot;
         readonly List<string> events = new();
         float t0 = -1f;
         LineRenderer scanBeam;   // 판독 중 로봇 머리 → 게이지 스캔 빔
@@ -57,11 +61,27 @@ namespace PlantDT
             ros.Subscribe<BoolMsg>("/gas/found", m => { if (m.data && !gasFound) AddEvent("누출원 발견 보고"); gasFound = m.data; });
             ros.Subscribe<PointMsg>("/gas/source_truth", m => { gasSourceGz = new Vector3((float)m.x, (float)m.y, (float)m.z); hasGasSource = true; });
             ros.Subscribe<Float32Msg>("/inspection/gauge_value", m => { gaugeBar = m.data; gaugeReadTime = Time.time; });
+            ros.Subscribe<Float32Msg>("/inspection/max_temp", m => OnMaxTemp(m.data));
+            ros.Subscribe<BoolMsg>("/gait_enable", m => OnGaitEnable(m.data));
+            ros.Subscribe<PointMsg>("/gas/source_estimate", m => OnEstimate(new Vector3((float)m.x, (float)m.y, (float)m.z)));
+            SetupSceneLinks();
             if (showRobotPov && robot != null && FindFirstObjectByType<RobotPovCamera>() == null) RobotPovCamera.Create(robot);
         }
 
         void Update()
         {
+            // 로봇 이동 궤적 (0.25m 마다 점 추가)
+            if (robot != null && trail != null && received > 0)
+            {
+                var p = robot.transform.position + Vector3.up * 0.03f;
+                if (trailCount == 0 || Vector3.Distance(p, lastTrailPt) > 0.25f)
+                {
+                    if (trailCount > 0 && Vector3.Distance(p, lastTrailPt) > 3f) { trail.positionCount = 0; trailCount = 0; }   // 재시작 점프 → 궤적 초기화
+                    trail.positionCount = ++trailCount; trail.SetPosition(trailCount - 1, p); lastTrailPt = p;
+                }
+            }
+            // 도킹 표시: 충전소 패드 초록 점멸
+            if (padRenderer != null) padRenderer.sharedMaterial = (docked && Mathf.PingPong(Time.time * 2f, 1f) > 0.3f) ? padMatOn : padMat;
             // 게이지 판독 연출: ALIGN/INSPECT 동안 로봇 머리에서 게이지 패널로 깜박이는 스캔 빔
             bool reading = missionState == "ALIGN" || missionState == "INSPECT";
             if (reading && robot != null && gaugePanel != null)
@@ -79,6 +99,44 @@ namespace PlantDT
                 scanBeam.enabled = true;
             }
             else if (scanBeam != null) scanBeam.enabled = false;
+        }
+
+        // 씬 오브젝트 연결: 충전소 패드(도킹 표시), 기계 배관(과열 표시), 로봇 이동 궤적
+        void SetupSceneLinks()
+        {
+            var pad = GameObject.Find("charging_station"); if (pad != null) padRenderer = pad.GetComponentInChildren<Renderer>();
+            if (padRenderer != null) { padMat = padRenderer.sharedMaterial; padMatOn = new Material(Shader.Find("HDRP/Unlit")); padMatOn.SetColor("_UnlitColor", new Color(0.3f, 1f, 0.4f)); }
+            var machine = GameObject.Find("factory_machine");
+            if (machine != null) { var t = machine.transform.Find("pipe_v"); if (t != null) pipeRenderer = t.GetComponent<Renderer>(); }
+            if (pipeRenderer != null) { pipeMat = pipeRenderer.sharedMaterial; pipeMatHot = new Material(Shader.Find("HDRP/Unlit")); pipeMatHot.SetColor("_UnlitColor", new Color(1f, 0.25f, 0.1f)); }
+            var tgo = new GameObject("RobotTrail"); trail = tgo.AddComponent<LineRenderer>();
+            trail.material = new Material(Shader.Find("HDRP/Unlit")); trail.material.SetColor("_UnlitColor", new Color(0.3f, 0.8f, 1f, 0.9f));
+            trail.widthMultiplier = 0.06f; trail.positionCount = 0; trail.useWorldSpace = true;
+        }
+
+        void OnMaxTemp(float t)
+        {
+            maxTemp = t; bool hot = t > OverheatC;
+            if (hot != overheat) { overheat = hot; AddEvent(hot ? $"과열 감지 — 배관 최고 {t:F0}℃" : "배관 온도 정상 복귀"); if (pipeRenderer != null) pipeRenderer.sharedMaterial = hot ? pipeMatHot : pipeMat; }
+        }
+
+        void OnGaitEnable(bool enabled)
+        {
+            bool rec = !enabled;
+            if (rec != recovering) { recovering = rec; AddEvent(rec ? "넘어짐 감지 → 자동 기립 복구 중" : "기립 복구 완료"); }
+        }
+
+        void OnEstimate(Vector3 gz)
+        {
+            gasEstimateGz = gz; hasGasEstimate = true;
+            if (estimateMarker == null)
+            {
+                estimateMarker = GameObject.CreatePrimitive(PrimitiveType.Sphere); estimateMarker.name = "GasSourceEstimate";
+                Destroy(estimateMarker.GetComponent<Collider>()); estimateMarker.transform.localScale = Vector3.one * 0.5f;
+                var m = new Material(Shader.Find("HDRP/Unlit")); m.SetColor("_UnlitColor", new Color(1f, 0.9f, 0.2f)); estimateMarker.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            estimateMarker.transform.position = new Vector3(-gz.y, 0.6f, gz.x);
+            AddEvent($"누출원 추정 위치 ({gz.x:F1}, {gz.y:F1})");
         }
 
         void OnState(string s)
@@ -115,7 +173,7 @@ namespace PlantDT
             var p = m.pose.pose.position; var q = m.pose.pose.orientation;
             float yaw = Mathf.Atan2(2f * (float)(q.w * q.z + q.x * q.y), 1f - 2f * (float)(q.y * q.y + q.z * q.z));
             lastGzPos = new Vector3((float)p.x, (float)p.y, (float)p.z); received++; lastYawDeg = yaw * Mathf.Rad2Deg;
-            if (robot != null) robot.SetPoseGz((float)p.x, (float)p.y, (float)p.z, yaw);
+            if (robot != null) robot.SetPoseGz((float)p.x, (float)p.y, (float)p.z, yaw, (float)q.x, (float)q.y, (float)q.z, (float)q.w);
         }
 
         void OnGUI()
@@ -127,7 +185,25 @@ namespace PlantDT
             string txt = $"odom recv={received}  gz pos=({lastGzPos.x:F2}, {lastGzPos.y:F2}, {lastGzPos.z:F2})  yaw={lastYawDeg:F0}°  v={spd:F2} m/s\n" +
                          $"미션: {stKo}   배터리: {(battery < 0 ? "-" : battery.ToString("F0") + "%")}{(docked ? "  ⚡도킹" : "")}\n" +
                          $"압력계: {(gaugeBar < 0 ? "-" : gaugeBar.ToString("F2") + " bar")}   가스: {gasPpm:F1} ppm{(gasAlarm ? "  ⚠ 알람" : "")}{(gasFound ? "  ✔ 누출원 발견" : "")}";
+            txt += $"   배관 온도: {(maxTemp < 0 ? "-" : maxTemp.ToString("F0") + "℃")}{(overheat ? "  🔥 과열" : "")}";
             GUI.Box(new Rect(8, 30, 620, 84), ""); GUI.Label(new Rect(14, 32, 610, 82), txt, st);
+            if (recovering || (robot != null && robot.Fallen))
+            {
+                var c = GUI.color; GUI.color = new Color(1f, 0.6f, 0.1f, 0.9f);
+                GUI.Box(new Rect(Screen.width / 2 - 220, 46, 440, 34), "");
+                GUI.color = c; GUI.Label(new Rect(Screen.width / 2 - 220, 46, 440, 34), "⚠ 넘어짐 감지 — 자동 기립 복구 중", big);
+            }
+            if (overheat)
+            {
+                var c = GUI.color; GUI.color = new Color(1f, 0.3f, 0.1f, 0.9f);
+                GUI.Box(new Rect(Screen.width / 2 - 220, 84, 440, 34), "");
+                GUI.color = c; GUI.Label(new Rect(Screen.width / 2 - 220, 84, 440, 34), $"🔥 OVERHEAT  배관 {maxTemp:F0}℃ (기준 {OverheatC:F0}℃)", big);
+            }
+            if (estimateMarker != null && Camera.main != null)
+            {
+                var sp = Camera.main.WorldToScreenPoint(estimateMarker.transform.position + Vector3.up * 0.5f);
+                if (sp.z > 0) GUI.Label(new Rect(sp.x - 80, Screen.height - sp.y - 14, 160, 28), "누출원 추정", big);
+            }
 
             // 가스 농도 (영상 스타일, 왼쪽 위 HUD 아래에 크게)
             if (missionState == "GOTO_FACTORY" || missionState == "SEEK" || missionState == "WAIT_RTH" || missionState == "DONE")
