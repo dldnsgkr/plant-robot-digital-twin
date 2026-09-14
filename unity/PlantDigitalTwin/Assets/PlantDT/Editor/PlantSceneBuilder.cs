@@ -7,7 +7,10 @@
 // 배치 근거는 Gazebo 쪽과 동일: 프리팹 렌더 바운드를 박스 월드 치수에 정렬
 //   공장 25×18 (중심 0,0), 복도 45×3.5 (x 12.5~57.5), 가스탱크 (-9,6), 팔레트 (-6,4)/(3,-5)
 using System.IO;
+using System.Globalization;
+using System.Xml;
 using System.Linq;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.Animations;
@@ -93,6 +96,9 @@ namespace PlantDT
                 robot.transform.rotation = follower.TargetRotation; robot.transform.position = follower.TargetPosition;
                 follower.animator = SetupSpotAnimator(robot);
             }
+
+            // ---- Gazebo 월드의 박스·실린더 장애물(계단·파이프·크레이트·드럼통·기계·충전소·스팀트랩)을 SDF 에서 읽어 배치 ----
+            BuildGazeboObstacles();
 
             // ---- 게이지 패널: Gazebo gauge_panel (38, 1.62, 0.6) 과 같은 자리, 복도 북벽 안쪽면에 눈금판 ----
             BuildGaugePanel();
@@ -274,6 +280,73 @@ namespace PlantDT
                 mf.sharedMesh = mesh;
                 Debug.Log($"[PlantDT] cut {childName}/{src.name}: {removed} triangles removed → {path}");
             }
+        }
+
+        // Gazebo 회전(roll,pitch,yaw) → Unity 회전. 좌표 변환 (x,y,z)→(-y,z,x) 는 반사(det −1)를 포함하므로
+        // 쿼터니언은 축을 변환하고 각도 부호를 뒤집는다: (qx,qy,qz,qw) → (qy, −qz, −qx, qw)
+        static Quaternion GzRot(float roll, float pitch, float yaw)
+        {
+            float cr = Mathf.Cos(roll / 2), sr = Mathf.Sin(roll / 2), cp = Mathf.Cos(pitch / 2), sp = Mathf.Sin(pitch / 2), cy = Mathf.Cos(yaw / 2), sy = Mathf.Sin(yaw / 2);
+            float qw = cr * cp * cy + sr * sp * sy, qx = sr * cp * cy - cr * sp * sy, qy = cr * sp * cy + sr * cp * sy, qz = cr * cp * sy - sr * sp * cy;
+            return new Quaternion(qy, -qz, -qx, qw);
+        }
+
+        static float[] Nums(string text) => text.Trim().Split(new[] { ' ', '\t', '\n' }, System.StringSplitOptions.RemoveEmptyEntries).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+
+        // plant_world.sdf 의 <model> 중 원시 도형(box/cylinder) visual 을 그대로 Unity 프리미티브로 만든다.
+        // 건물·에셋으로 대체된 모델(plant_building, gas_tank, 팔레트, 게이지)은 제외.
+        static void BuildGazeboObstacles()
+        {
+            var sdfPath = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../simulation/worlds/plant_world.sdf"));
+            if (!File.Exists(sdfPath)) { Debug.LogWarning($"[PlantDT] SDF not found: {sdfPath}"); return; }
+            var skip = new HashSet<string> { "ground", "plant_building", "gas_tank", "factory_pallet_1", "factory_pallet_2", "gauge_panel", "gauge_needle" };
+            var doc = new XmlDocument(); doc.Load(sdfPath);
+            var root = new GameObject("GazeboObstacles");
+            var matCache = new Dictionary<string, Material>();
+            int count = 0;
+            foreach (XmlNode model in doc.SelectNodes("//world/model"))
+            {
+                string mname = model.Attributes["name"].Value; if (skip.Contains(mname)) continue;
+                var mp = Nums(model.SelectSingleNode("pose")?.InnerText ?? "0 0 0 0 0 0");
+                var mPos = new Vector3(mp[0], mp[1], mp[2]); var mRot = GzRot(mp[3], mp[4], mp[5]);
+                var mgo = new GameObject(mname); mgo.transform.SetParent(root.transform, false);
+                foreach (XmlNode vis in model.SelectNodes(".//visual"))
+                {
+                    var geom = vis.SelectSingleNode("geometry"); if (geom == null) continue;
+                    var vp = Nums(vis.SelectSingleNode("pose")?.InnerText ?? "0 0 0 0 0 0");
+                    var vPosGz = new Vector3(vp[0], vp[1], vp[2]); var vRot = GzRot(vp[3], vp[4], vp[5]);
+                    // 월드 포즈 = 모델 포즈 ∘ visual 포즈 (Gazebo 좌표에서 합성 후 변환)
+                    // 위치: R_model(gz) 을 Unity 로 옮겨 적용해도 동일하므로 Unity 공간에서 합성
+                    var worldPos = Gz(mPos.x, mPos.y, mPos.z) + mRot * Gz(vPosGz.x, vPosGz.y, vPosGz.z);
+                    var worldRot = mRot * vRot;
+                    GameObject go; var box = geom.SelectSingleNode("box/size"); var cyl = geom.SelectSingleNode("cylinder");
+                    if (box != null)
+                    {
+                        var sz = Nums(box.InnerText); go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        go.transform.localScale = new Vector3(sz[1], sz[2], sz[0]);            // gz (x,y,z) 크기 → Unity (y,z,x)
+                    }
+                    else if (cyl != null)
+                    {
+                        float r = float.Parse(cyl.SelectSingleNode("radius").InnerText, CultureInfo.InvariantCulture);
+                        float l = float.Parse(cyl.SelectSingleNode("length").InnerText, CultureInfo.InvariantCulture);
+                        go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);                 // Unity 실린더: 높이 2(y축), 반지름 0.5
+                        go.transform.localScale = new Vector3(2 * r, l / 2f, 2 * r);           // gz 실린더 축 z → Unity y
+                    }
+                    else continue;
+                    Object.DestroyImmediate(go.GetComponent<Collider>());
+                    go.name = vis.Attributes["name"]?.Value ?? "visual"; go.transform.SetParent(mgo.transform, false);
+                    go.transform.position = worldPos; go.transform.rotation = worldRot;
+                    var diff = vis.SelectSingleNode("material/diffuse")?.InnerText ?? "0.6 0.6 0.6 1"; var c = Nums(diff);
+                    string key = $"{c[0]:F2}_{c[1]:F2}_{c[2]:F2}";
+                    if (!matCache.TryGetValue(key, out var mat))
+                    {
+                        mat = new Material(Shader.Find("HDRP/Lit")) { name = $"Gz_{key}" }; mat.SetColor("_BaseColor", new Color(c[0], c[1], c[2], 1f)); mat.SetFloat("_Smoothness", 0.3f);
+                        Directory.CreateDirectory("Assets/PlantDT/Materials"); AssetDatabase.CreateAsset(mat, $"Assets/PlantDT/Materials/Gz_{key}.mat"); matCache[key] = mat;
+                    }
+                    go.GetComponent<Renderer>().sharedMaterial = mat; count++;
+                }
+            }
+            Debug.Log($"[PlantDT] Gazebo obstacles: {count} visuals from SDF");
         }
 
         static void BuildGaugePanel()
