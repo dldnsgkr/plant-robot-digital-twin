@@ -12,6 +12,9 @@ namespace PlantDT
         [Tooltip("이 속도(m/s) 이상이면 걷기 애니메이션")] public float movingThreshold = 0.04f;
         [Tooltip("애니메이션 재생 속도 = 실제속도 / 이 값")] public float animNominalSpeed = 0.5f;
         [Tooltip("높이(z) 흔들림 필터 시간(초)")] public float heightSmooth = 0.6f;
+        [Tooltip("이 거리(m) 이상 위치가 튀면 보간 없이 순간이동 (미션 재시작)")] public float teleportThreshold = 3f;
+        /// 직전 프레임에 순간이동이 있었는지 (카메라 스냅용, 읽으면 해제)
+        public bool Teleported { get; set; }
         [Tooltip("이동 중 모델 방향을 몸체 yaw 대신 이동 방향(속도 벡터)으로 잡아 보행 헌팅을 숨김")] public bool headingFromVelocity = false;   // 기본 끔: Gazebo 몸체 yaw 를 그대로 반영 (0.22 에서 요동 ±3.5° 로 충분히 작음)
         [Tooltip("방향 필터 시간(초)")] public float headingSmooth = 1.0f;
         Vector3 velFiltered; float headingYaw; bool headingInit;
@@ -31,6 +34,11 @@ namespace PlantDT
         {
             var p = Gz(x, y, z);
             float now = Time.time;
+            // 큰 점프(미션 재시작·재접속으로 위치가 3m 이상 바뀜)는 보간 없이 즉시 이동 — 벽 통과 미끄러짐·가짜 걷기 방지
+            if (has && Vector3.Distance(p, lastTarget) > teleportThreshold)
+            {
+                has = false; speedFiltered = 0f; velFiltered = Vector3.zero; headingInit = false; Teleported = true;
+            }
             if (has && now > lastTargetTime + 1e-3f)
             {
                 var d = p - lastTarget; d.y = 0f;

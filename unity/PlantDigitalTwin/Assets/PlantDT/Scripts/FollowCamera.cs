@@ -21,6 +21,12 @@ namespace PlantDT
             var fwd = follower != null ? follower.Forward : Vector3.ProjectOnPlane(target.forward, Vector3.up);
             if (fwd.sqrMagnitude < 1e-4f) fwd = fwdSmooth;
             fwdSmooth = Vector3.Slerp(fwdSmooth, fwd.normalized, 1f - Mathf.Exp(-Time.deltaTime / Mathf.Max(headingSmooth, 1e-3f)));
+            if (follower != null && follower.Teleported)   // 로봇 순간이동 시 카메라도 즉시 따라감
+            {
+                follower.Teleported = false; fwdSmooth = fwd.normalized;
+                transform.position = target.position + Quaternion.LookRotation(fwdSmooth, Vector3.up) * offset;
+                transform.LookAt(target.position + Vector3.up * 0.4f);
+            }
             var frame = Quaternion.LookRotation(fwdSmooth, Vector3.up);
             var want = target.position + frame * offset;
             float k = smooth <= 0 ? 1f : 1f - Mathf.Exp(-Time.deltaTime / smooth);
